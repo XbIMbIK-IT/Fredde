@@ -1,6 +1,7 @@
-import math
 import random
+from functools import partial
 
+import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider
@@ -13,30 +14,30 @@ from fredde import freddis
 # ============================================================
 #  ВИЗУАЛЬНЫЕ НАСТРОЙКИ (тёмная тема в стиле Obsidian)
 # ============================================================
-BG_COLOR        = "#202225"   # фон окна и осей
-PANEL_COLOR     = "#2b2d31"   # фон панели настроек / кнопок
-PANEL_HOVER     = "#3b3d42"
-EDGE_COLOR      = "#5a5d63"   # цвет связей родитель -> ребёнок
-TEXT_COLOR      = "#dcddde"   # цвет имени узла
-GEN_TEXT_COLOR  = "#75787f"   # цвет подписи поколения под узлом
-ACCENT_COLOR    = "#7289da"   # обводка узла при перетаскивании / акцент слайдеров
+BG_COLOR       = "#202225"   # фон окна и осей
+PANEL_COLOR    = "#2b2d31"   # фон панели настроек / кнопок
+PANEL_HOVER    = "#3b3d42"
+EDGE_COLOR     = "#5a5d63"   # цвет связей родитель -> ребёнок
+TEXT_COLOR     = "#dcddde"   # цвет имени узла
+GEN_TEXT_COLOR = "#75787f"   # цвет подписи поколения под узлом
+ACCENT_COLOR   = "#7289da"   # обводка узла при перетаскивании / акцент слайдеров
+
+NODE_RADIUS = 0.16
 
 # ============================================================
-#  ФИЗИКА (аналог "force graph" в Obsidian) — теперь регулируется
-#  ползунками во время работы, значения ниже — только стартовые.
-#  gen_pull специально сделан слабым: поколения задают лишь лёгкий
-#  вертикальный дрейф, а не жёсткие ряды, чтобы граф не превращался
-#  в застывшее дерево, а вёл себя как органичное "облако" узлов.
+#  ФИЗИКА (аналог "force graph" в Obsidian), регулируется ползунками.
+#  gen_pull специально слабый: поколения задают лишь лёгкий вертикальный
+#  дрейф, а не жёсткие ряды — иначе граф превращается в застывшее дерево.
 # ============================================================
 DEFAULT_PARAMS = {
-    "repulsion":   1.15,   # взаимное отталкивание узлов
-    "spring_len":  1.9,    # желаемая длина связи родитель -> ребёнок
-    "spring_k":    0.03,   # жёсткость этой "пружины"
-    "gen_pull":    0.015,  # слабое притяжение к своему поколению по Y
-    "center_pull": 0.004,  # лёгкое притяжение к центру
-    "damping":     0.86,   # затухание скорости (вязкость)
-    "jitter":      0.010,  # амплитуда случайного покачивания за кадр
-    "dt":          0.7,    # шаг интегрирования
+    "repulsion":   1.15,
+    "spring_len":  1.9,
+    "spring_k":    0.03,
+    "gen_pull":    0.015,
+    "center_pull": 0.004,
+    "damping":     0.86,
+    "jitter":      0.010,
+    "dt":          0.7,
 }
 
 SLIDERS = [
@@ -51,22 +52,26 @@ SLIDERS = [
     ("dt",            "Скорость симуляции",     0.1,   1.5),
 ]
 
-GEN_HEIGHT = 2.6   # вертикальное расстояние между "домашними" линиями поколений
+GEN_HEIGHT = 2.6   # вертикальный шаг между "домашними" линиями поколений
 
-DRAG_CATCH_RADIUS  = 0.34   # насколько близко нужно кликнуть, чтобы "схватить" узел
-FRAME_INTERVAL_MS  = 33     # ~30 fps
+DRAG_CATCH_RADIUS = 0.34
+FRAME_INTERVAL_MS = 16   # ~60 fps
+
+# анимация поэтапного появления при пересборке (как в Obsidian: узлы
+# всплывают по одному, затем прорисовываются связи)
+REVEAL_FRAMES_PER_NODE = 3
+REVEAL_FRAMES_PER_EDGE = 1
 
 # ---------- геометрия выезжающей панели настроек ----------
 PANEL_WIDTH       = 0.24
 PANEL_BOTTOM      = 0.08
 PANEL_HEIGHT_FRAC = 0.86
-PANEL_OPEN_X      = 0.73   # левый край панели, когда она выехала
-PANEL_CLOSED_X    = 1.03   # левый край панели, когда она спрятана за краем окна
-PANEL_EASE        = 0.25   # скорость анимации выезда/заезда (0..1 за кадр)
+PANEL_OPEN_X      = 0.73
+PANEL_CLOSED_X    = 1.03
+PANEL_EASE        = 0.25
 
 
 def show():
-    # прячем верхнюю панель matplotlib (лупы, стрелки, настройки осей и т.д.)
     plt.rcParams["toolbar"] = "None"
 
     G = nx.DiGraph()
@@ -82,32 +87,42 @@ def show():
 
     params = dict(DEFAULT_PARAMS)
 
-    # ---------- Группируем узлы по поколениям (только для стартовой раскладки) ----------
+    # ---------- Индексация узлов и связей под numpy ----------
+    nodes = list(G.nodes)
+    edges = list(G.edges)
+    n = len(nodes)
+    node_index = {node: i for i, node in enumerate(nodes)}
+    parent_idx = np.array([node_index[p] for p, _ in edges], dtype=int)
+    child_idx = np.array([node_index[c] for _, c in edges], dtype=int)
+
     generations = {}
-    for node in G.nodes:
+    for node in nodes:
         generations.setdefault(node.generation, []).append(node)
     gens_present = sorted(generations.keys())
 
     def gen_y(gen):
-        # поколение 0 сверху, дальше дерево растёт вниз
         return -gen * GEN_HEIGHT
 
-    # ---------- Начальные позиции: по поколениям, X — случайно ----------
-    # Это только отправная точка. Дальше физика с малым gen_pull быстро
-    # "расслабляет" раскладку в органичное облако, а не держит жёсткие ряды.
-    pos = {}
-    vel = {node: [0.0, 0.0] for node in G.nodes}
+    gen_target_y = np.array([gen_y(node.generation) for node in nodes])
 
-    for gen, nodes in generations.items():
-        width = max(len(nodes), 1)
-        for i, node in enumerate(nodes):
-            x = (i - (width - 1) / 2) * DEFAULT_PARAMS["spring_len"] * 1.3 + random.uniform(-0.4, 0.4)
-            y = gen_y(gen) + random.uniform(-0.3, 0.3)
-            pos[node] = [x, y]
+    # ---------- Начальные позиции (numpy) ----------
+    pos = np.zeros((n, 2))
+    vel = np.zeros((n, 2))
+    dragged_mask = np.zeros(n, dtype=bool)
 
-    # ---------- Границы обзора считаем один раз, чтобы камера не "тряслась" вместе с узлами ----------
+    def layout_by_generation(spring_len, spread_x, spread_y):
+        for gen, gnodes in generations.items():
+            width = max(len(gnodes), 1)
+            for i, node in enumerate(gnodes):
+                idx = node_index[node]
+                pos[idx, 0] = (i - (width - 1) / 2) * spring_len * 1.3 + random.uniform(-spread_x, spread_x)
+                pos[idx, 1] = gen_y(gen) + random.uniform(-spread_y, spread_y)
+                vel[idx] = 0.0
+
+    layout_by_generation(DEFAULT_PARAMS["spring_len"], 0.4, 0.3)
+
     max_width = max((len(v) for v in generations.values()), default=1)
-    x_limit = max(max_width * DEFAULT_PARAMS["spring_len"] * 1.0, 3.5) + 3.0
+    x_limit = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) + 3.0
     y_top = gen_y(gens_present[0]) + 2.5
     y_bottom = gen_y(gens_present[-1]) - 2.5
 
@@ -121,77 +136,80 @@ def show():
         pass
     plt.subplots_adjust(bottom=0.1, left=0.03, right=0.97, top=0.94)
 
-    dragged_node = {"node": None}
-    paused_nodes = set()   # узлы, которые сейчас не участвуют в физике (их тащит мышь)
+    dragged_idx = {"i": None}
 
     # ---------------------------------------------------------
-    #  ФИЗИЧЕСКАЯ СИМУЛЯЦИЯ
+    #  ПОЭТАПНОЕ ПОЯВЛЕНИЕ (узлы, потом связи)
+    # ---------------------------------------------------------
+    reveal = {
+        "active": False,
+        "frame": 0,
+        "node_order": list(range(n)),
+        "node_i": n,
+        "edge_order": list(range(len(edges))),
+        "edge_i": len(edges),
+    }
+
+    def start_reveal():
+        order = list(range(n))
+        random.shuffle(order)
+        eorder = list(range(len(edges)))
+        random.shuffle(eorder)
+        reveal.update(active=True, frame=0, node_order=order, node_i=0, edge_order=eorder, edge_i=0)
+
+    def advance_reveal():
+        if not reveal["active"]:
+            return
+        reveal["frame"] += 1
+        if reveal["node_i"] < n:
+            if reveal["frame"] % REVEAL_FRAMES_PER_NODE == 0:
+                reveal["node_i"] += 1
+        elif reveal["edge_i"] < len(edges):
+            if reveal["frame"] % REVEAL_FRAMES_PER_EDGE == 0:
+                reveal["edge_i"] += 1
+        else:
+            reveal["active"] = False
+
+    # ---------------------------------------------------------
+    #  ФИЗИКА (векторизовано на numpy — быстрее и компактнее)
     # ---------------------------------------------------------
     def compute_forces():
-        forces = {node: [0.0, 0.0] for node in G.nodes}
-        nodes_list = list(G.nodes)
+        diff = pos[:, None, :] - pos[None, :, :]           # (n, n, 2)
+        dist_sq = np.sum(diff * diff, axis=-1)
+        np.fill_diagonal(dist_sq, np.inf)
+        dist = np.sqrt(dist_sq)
+        dist_safe = np.where(dist < 1e-3, 1e-3, dist)
 
-        repulsion = params["repulsion"]
-        spring_len = params["spring_len"]
-        spring_k = params["spring_k"]
-        gen_pull = params["gen_pull"]
-        center_pull = params["center_pull"]
-        jitter = params["jitter"]
+        repel = params["repulsion"] / np.where(dist_sq < 1e-6, 1e-6, dist_sq)
+        forces = np.stack([
+            np.sum(diff[..., 0] / dist_safe * repel, axis=1),
+            np.sum(diff[..., 1] / dist_safe * repel, axis=1),
+        ], axis=-1)
 
-        # взаимное отталкивание всех узлов друг от друга (кулоновское)
-        for i in range(len(nodes_list)):
-            a = nodes_list[i]
-            ax_, ay_ = pos[a]
-            for j in range(i + 1, len(nodes_list)):
-                b = nodes_list[j]
-                dx = ax_ - pos[b][0]
-                dy = ay_ - pos[b][1]
-                dist_sq = dx * dx + dy * dy
-                dist = math.sqrt(dist_sq) or 0.001
-                f = repulsion / dist_sq
-                fx, fy = dx / dist * f, dy / dist * f
-                forces[a][0] += fx
-                forces[a][1] += fy
-                forces[b][0] -= fx
-                forces[b][1] -= fy
+        if len(edges):
+            pdiff = pos[child_idx] - pos[parent_idx]
+            edist = np.sqrt(np.sum(pdiff * pdiff, axis=1))
+            edist_safe = np.where(edist < 1e-3, 1e-3, edist)
+            stretch = edist_safe - params["spring_len"]
+            fmag = params["spring_k"] * stretch
+            efx = pdiff[:, 0] / edist_safe * fmag
+            efy = pdiff[:, 1] / edist_safe * fmag
+            np.add.at(forces[:, 0], parent_idx, efx)
+            np.add.at(forces[:, 1], parent_idx, efy)
+            np.add.at(forces[:, 0], child_idx, -efx)
+            np.add.at(forces[:, 1], child_idx, -efy)
 
-        # притяжение вдоль родственных связей ("пружины")
-        for parent, child in G.edges:
-            dx = pos[child][0] - pos[parent][0]
-            dy = pos[child][1] - pos[parent][1]
-            dist = math.sqrt(dx * dx + dy * dy) or 0.001
-            stretch = dist - spring_len
-            f = spring_k * stretch
-            fx, fy = dx / dist * f, dy / dist * f
-            forces[parent][0] += fx
-            forces[parent][1] += fy
-            forces[child][0] -= fx
-            forces[child][1] -= fy
-
-        # слабое притяжение к своей линии поколения + к центру + покачивание
-        for node in G.nodes:
-            target_y = gen_y(node.generation)
-            forces[node][1] += (target_y - pos[node][1]) * gen_pull
-            forces[node][0] += -pos[node][0] * center_pull
-            forces[node][0] += random.uniform(-jitter, jitter)
-            forces[node][1] += random.uniform(-jitter, jitter)
-
+        forces[:, 1] += (gen_target_y - pos[:, 1]) * params["gen_pull"]
+        forces[:, 0] += -pos[:, 0] * params["center_pull"]
+        forces += np.random.uniform(-params["jitter"], params["jitter"], size=(n, 2))
         return forces
 
     def step_physics():
         forces = compute_forces()
-        damping = params["damping"]
+        free = ~dragged_mask
         dt = params["dt"]
-        for node in G.nodes:
-            if node in paused_nodes:
-                continue
-            vx, vy = vel[node]
-            fx, fy = forces[node]
-            vx = (vx + fx * dt) * damping
-            vy = (vy + fy * dt) * damping
-            vel[node] = [vx, vy]
-            pos[node][0] += vx * dt
-            pos[node][1] += vy * dt
+        vel[free] = (vel[free] + forces[free] * dt) * params["damping"]
+        pos[free] += vel[free] * dt
 
     # ---------------------------------------------------------
     #  ОТРИСОВКА
@@ -204,11 +222,14 @@ def show():
         ax.clear()
         ax.set_facecolor(BG_COLOR)
 
-        # рёбра родитель -> ребёнок — прямые линии, без дуги
-        for parent, child in G.edges:
-            x1, y1 = pos[parent]
-            x2, y2 = pos[child]
-            arrow = FancyArrowPatch(
+        visible_nodes = set(reveal["node_order"][:reveal["node_i"]])
+        visible_edges = set(reveal["edge_order"][:reveal["edge_i"]])
+
+        for e_i in visible_edges:
+            p_i, c_i = parent_idx[e_i], child_idx[e_i]
+            x1, y1 = pos[p_i]
+            x2, y2 = pos[c_i]
+            ax.add_patch(FancyArrowPatch(
                 (x1, y1), (x2, y2),
                 connectionstyle="arc3,rad=0.0",
                 arrowstyle="-|>",
@@ -218,41 +239,34 @@ def show():
                 alpha=0.8,
                 zorder=1,
                 shrinkA=16, shrinkB=16,
-            )
-            ax.add_patch(arrow)
+            ))
 
-        # узлы с мягким "свечением"; поколение теперь подписано прямо
-        # под самим узлом, а не привязано к общей фоновой линии
-        for node in G.nodes:
-            x, y = pos[node]
+        for i in visible_nodes:
+            node = nodes[i]
+            x, y = pos[i]
             color = color_of(node)
-            is_dragged = node is dragged_node["node"]
+            is_dragged = dragged_idx["i"] == i
 
             for radius, alpha in ((0.34, 0.10), (0.27, 0.16), (0.21, 0.22)):
                 ax.add_patch(Circle((x, y), radius, color=color, alpha=alpha, zorder=2, linewidth=0))
 
             ax.add_patch(Circle(
-                (x, y), 0.16, facecolor=color, zorder=3,
+                (x, y), NODE_RADIUS, facecolor=color, zorder=3,
                 edgecolor=(ACCENT_COLOR if is_dragged else "#ffffff"),
                 linewidth=2.2 if is_dragged else 1.1,
             ))
 
-            # имя — над узлом
-            ax.text(
-                x, y + 0.30, node.name,
-                color=TEXT_COLOR, fontsize=9, fontweight="bold",
-                ha="center", va="bottom", zorder=4,
-            )
-            # поколение — под узлом
-            ax.text(
-                x, y - 0.30, f"Поколение {node.generation}",
-                color=GEN_TEXT_COLOR, fontsize=7,
-                ha="center", va="top", zorder=4,
-            )
+            ax.text(x, y + 0.30, node.name, color=TEXT_COLOR, fontsize=9,
+                    fontweight="bold", ha="center", va="bottom", zorder=4)
+            ax.text(x, y - 0.30, f"Поколение {node.generation}", color=GEN_TEXT_COLOR,
+                    fontsize=7, ha="center", va="top", zorder=4)
 
         ax.set_title("Генеалогическое древо", color=TEXT_COLOR, fontsize=14, pad=14)
         ax.set_xlim(-x_limit, x_limit)
         ax.set_ylim(y_bottom, y_top)
+        # фиксируем пропорции 1:1, чтобы кружки оставались круглыми
+        # при любом изменении размеров окна
+        ax.set_aspect("equal", adjustable="box")
         ax.set_axis_off()
 
     # ---------------------------------------------------------
@@ -261,62 +275,53 @@ def show():
     def find_node(x, y):
         if x is None or y is None:
             return None
-        closest_node = None
-        closest_distance = float("inf")
-        for node, (nx_pos, ny_pos) in pos.items():
-            distance = math.hypot(nx_pos - x, ny_pos - y)
-            if distance < DRAG_CATCH_RADIUS and distance < closest_distance:
-                closest_distance = distance
-                closest_node = node
-        return closest_node
+        dist = np.hypot(pos[:, 0] - x, pos[:, 1] - y)
+        i = int(np.argmin(dist))
+        return i if dist[i] < DRAG_CATCH_RADIUS else None
 
     def on_press(event):
         if event.inaxes != ax or event.xdata is None or event.ydata is None:
             return
-        node = find_node(event.xdata, event.ydata)
-        dragged_node["node"] = node
-        if node is not None:
-            paused_nodes.add(node)
-            vel[node] = [0.0, 0.0]
+        i = find_node(event.xdata, event.ydata)
+        dragged_idx["i"] = i
+        if i is not None:
+            dragged_mask[i] = True
+            vel[i] = 0.0
 
     def on_motion(event):
-        node = dragged_node["node"]
-        if node is None or event.inaxes != ax:
+        i = dragged_idx["i"]
+        if i is None or event.inaxes != ax or event.xdata is None or event.ydata is None:
             return
-        if event.xdata is None or event.ydata is None:
-            return
-        pos[node][0] = event.xdata
-        pos[node][1] = event.ydata
+        pos[i] = (event.xdata, event.ydata)
 
     def on_release(event):
-        node = dragged_node["node"]
-        if node is not None:
-            paused_nodes.discard(node)
-        dragged_node["node"] = None
+        i = dragged_idx["i"]
+        if i is not None:
+            dragged_mask[i] = False
+        dragged_idx["i"] = None
+
+    fig.canvas.mpl_connect("button_press_event", on_press)
+    fig.canvas.mpl_connect("motion_notify_event", on_motion)
+    fig.canvas.mpl_connect("button_release_event", on_release)
 
     # ---------------------------------------------------------
-    #  КНОПКА "ПЕРЕСОБРАТЬ"
+    #  КНОПКА "ПЕРЕСОБРАТЬ" — новая раскладка + каскадное появление
     # ---------------------------------------------------------
     def regenerate(event):
-        for gen, nodes in generations.items():
-            width = max(len(nodes), 1)
-            for i, node in enumerate(nodes):
-                pos[node][0] = (i - (width - 1) / 2) * params["spring_len"] * 1.3 + random.uniform(-0.5, 0.5)
-                pos[node][1] = gen_y(gen) + random.uniform(-0.4, 0.4)
-                vel[node] = [random.uniform(-0.6, 0.6), random.uniform(-0.6, 0.6)]
+        layout_by_generation(params["spring_len"], 0.5, 0.4)
+        vel[:] = np.random.uniform(-0.6, 0.6, size=(n, 2))
+        start_reveal()
 
     button_ax = fig.add_axes([0.77, 0.015, 0.2, 0.055])
     button_ax.set_facecolor(PANEL_COLOR)
-    regenerate_button = Button(
-        button_ax, "⟳ Пересобрать",
-        color=PANEL_COLOR, hovercolor=PANEL_HOVER,
-    )
+    regenerate_button = Button(button_ax, "⟳ Пересобрать", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
     regenerate_button.label.set_color(TEXT_COLOR)
     regenerate_button.label.set_fontsize(10)
     regenerate_button.on_clicked(regenerate)
 
     # ---------------------------------------------------------
-    #  ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАСТРОЕК СИМУЛЯЦИИ (как шестерёнка в Obsidian)
+    #  ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАСТРОЕК (как шестерёнка в Obsidian).
+    #  По умолчанию панель закрыта (спрятана за правым краем окна).
     # ---------------------------------------------------------
     panel_state = {"x": PANEL_CLOSED_X, "target_x": PANEL_CLOSED_X, "open": False}
 
@@ -330,11 +335,8 @@ def show():
 
     title_open_x = PANEL_OPEN_X + 0.02
     title_y = PANEL_BOTTOM + PANEL_HEIGHT_FRAC - 0.045
-    title_text = fig.text(
-        PANEL_CLOSED_X + 0.02, title_y,
-        "Параметры симуляции",
-        color=TEXT_COLOR, fontsize=11, fontweight="bold", zorder=11,
-    )
+    title_text = fig.text(title_open_x, title_y, "Параметры симуляции",
+                           color=TEXT_COLOR, fontsize=11, fontweight="bold", zorder=11)
 
     slider_axes_info = []   # (ax, open_x, y, w, h)
     label_texts_info = []   # (text_obj, open_x, y)
@@ -344,35 +346,26 @@ def show():
     row_gap = 0.075
     row_h = 0.026
 
+    def update_param(key, val):
+        params[key] = val
+
     for idx, (key, label, vmin, vmax) in enumerate(SLIDERS):
         y = row_top - idx * row_gap
         open_x = PANEL_OPEN_X + 0.035
         w = PANEL_WIDTH - 0.07
-
         label_open_x = PANEL_OPEN_X + 0.03
         label_y = y + row_h + 0.018
-        txt = fig.text(
-            label_open_x, label_y, label,
-            color=TEXT_COLOR, fontsize=8.5, zorder=11,
-        )
+
+        txt = fig.text(label_open_x, label_y, label, color=TEXT_COLOR, fontsize=8.5, zorder=11)
         label_texts_info.append((txt, label_open_x, label_y))
 
         slider_ax = fig.add_axes([open_x, y, w, row_h])
         slider_ax.set_zorder(11)
         slider_ax.set_facecolor(PANEL_HOVER)
-        slider = Slider(
-            slider_ax, "", vmin, vmax,
-            valinit=params[key], color=ACCENT_COLOR,
-        )
+        slider = Slider(slider_ax, "", vmin, vmax, valinit=params[key], color=ACCENT_COLOR)
         slider.valtext.set_color(TEXT_COLOR)
         slider.valtext.set_fontsize(7.5)
-
-        def make_callback(param_key):
-            def _cb(val, k=param_key):
-                params[k] = val
-            return _cb
-
-        slider.on_changed(make_callback(key))
+        slider.on_changed(partial(update_param, key))
 
         slider_axes_info.append((slider_ax, open_x, y, w, row_h))
         sliders.append(slider)
@@ -386,12 +379,7 @@ def show():
     reset_button = Button(reset_button_ax, "Сбросить настройки", color=PANEL_HOVER, hovercolor=ACCENT_COLOR)
     reset_button.label.set_color(TEXT_COLOR)
     reset_button.label.set_fontsize(8.5)
-
-    def reset_params(event):
-        for slider in sliders:
-            slider.reset()
-
-    reset_button.on_clicked(reset_params)
+    reset_button.on_clicked(lambda event: [s.reset() for s in sliders])
 
     def sync_panel_positions():
         delta = panel_state["x"] - PANEL_OPEN_X
@@ -403,6 +391,10 @@ def show():
             txt.set_position((open_x + delta, y))
         reset_button_ax.set_position([reset_open_x + delta, reset_y, reset_w, reset_h])
 
+    # приводим панель и все её элементы в закрытое состояние сразу,
+    # до первого кадра — иначе слайдеры на миг "висят в воздухе"
+    sync_panel_positions()
+
     def toggle_panel(event):
         panel_state["open"] = not panel_state["open"]
         panel_state["target_x"] = PANEL_OPEN_X if panel_state["open"] else PANEL_CLOSED_X
@@ -413,15 +405,12 @@ def show():
     gear_button.label.set_fontsize(13)
     gear_button.on_clicked(toggle_panel)
 
-    fig.canvas.mpl_connect("button_press_event", on_press)
-    fig.canvas.mpl_connect("motion_notify_event", on_motion)
-    fig.canvas.mpl_connect("button_release_event", on_release)
-
     # ---------------------------------------------------------
     #  ЦИКЛ АНИМАЦИИ
     # ---------------------------------------------------------
     def animate(frame):
         step_physics()
+        advance_reveal()
         draw_graph()
 
         if panel_state["x"] != panel_state["target_x"]:
@@ -434,6 +423,6 @@ def show():
 
     draw_graph()
     anim = FuncAnimation(fig, animate, interval=FRAME_INTERVAL_MS, cache_frame_data=False)
-    fig._tree_animation_ref = anim  # чтобы объект не был уничтожен сборщиком мусора
+    fig._tree_animation_ref = anim
 
     plt.show()
