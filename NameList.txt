@@ -27,6 +27,7 @@ Sanya
 Vova
 Ilya
 User
+Admin
 Starlight
 Burmaldved
 Misha
@@ -72,6 +73,8 @@ Paddington
 Baloo
 Pudge
 Huskar
+Lina
+Luna
 Lona
 Naga
 Magnus
@@ -116,3 +119,6 @@ Juliamo Morro
 Cassius Thundercock
 Morvein
 Yaderny Reaktor
+Geniy Orgiy
+Abubachir Trahov
+PenisPeek
