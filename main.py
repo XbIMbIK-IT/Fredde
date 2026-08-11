@@ -27,26 +27,26 @@ class Fredde:
         self.rarity = rarity
         self.parents = parents if parents else []
         self.generation = generation
+
         
+    @property
+    def family(self):
+        family = set()
 
+        for parent in self.parents:
+            family.add(parent)
+            
+            for relative in parent.parents:
+                family.add(relative)
 
+        return family
 
-def get_family(fredde):
-    family = set()
-
-    for parent in fredde.parents:
-        family.add(parent)
-
-        for relative in get_family(parent):
-            family.add(relative)
-
-    return family
 
 
 
 def is_inbreeding(parent1, parent2):
-    family1 = get_family(parent1)
-    family2 = get_family(parent2)
+    family1 = parent1.family
+    family2 = parent2.family
 
     return parent1 in family2 or parent2 in family1 or bool(family1 & family2)
 
