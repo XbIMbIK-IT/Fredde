@@ -70,10 +70,7 @@ def SEX(parent1, parent2, name):
 
     # Разница поколений
     if parent1.generation != parent2.generation:
-        if parent1.generation < parent2.generation:
-            gendif = parent2.generation - parent1.generation
-        else:
-            gendif = parent1.generation - parent2.generation
+        gendif = abs(parent2.generation - parent1.generation)
         MutRate += (gendif * 2)
 
     # Общая доминантность
