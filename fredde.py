@@ -1,6 +1,3 @@
-# RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
-
-
 class Fredde:
     def __init__(
         self,
