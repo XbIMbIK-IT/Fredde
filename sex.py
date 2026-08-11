@@ -2,7 +2,7 @@ from fredde import  Fredde
 
 import random
 
-
+RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 
 def is_inbreeding(parent1, parent2):
     family1 = parent1.family
