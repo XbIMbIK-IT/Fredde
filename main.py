@@ -68,6 +68,14 @@ def SEX(parent1, parent2, name):
     elif random.random() <= 0.4 and parent1.generation == parent2.generation:
         MutRate -= 4
 
+    # Разница поколений
+    if parent1.generation != parent2.generation:
+        if parent1.generation < parent2.generation:
+            gendif = parent2.generation - parent1.generation
+        else:
+            gendif = parent1.generation - parent2.generation
+        MutRate += (gendif * 2)
+
     # Общая доминантность
     total_dom = parent1.gendom + parent2.gendom
     # GenID
