@@ -1,6 +1,7 @@
 import random
 from fredde import Fredde
 from sex import SEX
+import tree
 
 with open("NameList.txt", 'r') as f:
     NameList = f.read().splitlines()
@@ -55,3 +56,5 @@ print(baby.gendom)
 print(baby.mutrate)
 print(baby.color)
 print(baby.rarity)
+
+tree.show()

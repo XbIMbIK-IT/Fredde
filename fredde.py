@@ -1,3 +1,5 @@
+freddis = []
+
 class Fredde:
     def __init__(
         self,
@@ -21,6 +23,7 @@ class Fredde:
         self.parents = parents if parents else []
         self.generation = generation
 
+        freddis.append(self)
         
     @property
     def family(self):
