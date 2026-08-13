@@ -63,7 +63,7 @@ def SEX(parent1, parent2, name):
 
         # Цвет
         for i in range(3):
-            babycolor[i] *= random.uniform(0.8, 1.2)
+            babycolor[i] *= random.uniform(0.5, 2)
             babycolor[i] = max(
                 0,
                 min(255, round(babycolor[i]))
