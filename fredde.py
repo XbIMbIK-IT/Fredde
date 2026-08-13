@@ -5,7 +5,7 @@ class Fredde:
         self,
         name,
         age=1,
-        gender='bi', #boy, girl, is (intersex), cf (childfree)
+        gender='is', #boy, girl, is (intersex), cf (childfree)
         genid=1,
         gendom=1,
         mutrate=5,
