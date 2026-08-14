@@ -7,6 +7,9 @@ with open("NameList.txt", 'r') as f:
     NameList = f.read().splitlines()
 SEX_AGE = 3
 
+def checkranname():
+    print(random.choice(NameList))
+
 def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
         return None
