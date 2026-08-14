@@ -3,6 +3,27 @@ from fredde import  Fredde
 import random
 
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
+SEX_AGE = 3
+
+
+def TrySex(parent1, parent2, name):
+    if not parent1.alive or not parent2.alive:
+        return None
+
+    # CF вообще не участвует
+    if parent1.gender == 'cf' or parent2.gender == 'cf':
+        return None
+
+    # IS может с кем угодно
+    if parent1.gender == 'is' or parent2.gender == 'is':
+        pass
+    elif parent1.gender == parent2.gender:
+        return None
+
+    if parent1.age < SEX_AGE or parent2.age < SEX_AGE:
+        return None
+
+    return SEX(parent1, parent2, name)
 
 def is_inbreeding(parent1, parent2):
     family1 = parent1.family
@@ -88,6 +109,17 @@ def SEX(parent1, parent2, name):
 
         babyrarity = RarityList[rarity_index]
 
+    # Пол ребенка
+    gender_roll = random.uniform(0, 100)
+    if gender_roll < 45:
+        babygender = 'boy'
+    elif gender_roll < 90:
+        babygender = 'girl'
+    elif gender_roll < 95:
+        babygender = 'cf'
+    else:
+        babygender = 'is'
+    
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
@@ -99,7 +131,8 @@ def SEX(parent1, parent2, name):
         mutrate=MutRate,
         rarity=babyrarity,
         parents=[parent1, parent2],
-        generation=babygeneration
+        generation=babygeneration,
+        gender=babygender
     )
 
 
