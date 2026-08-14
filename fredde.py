@@ -1,4 +1,4 @@
-freddis = []
+freddies = []
 
 class Fredde:
     def __init__(
