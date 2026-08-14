@@ -9,7 +9,8 @@ Ded1 = Fredde(
     genid=10,
     gendom=0.3,
     mutrate=0,
-    rarity='rare'
+    rarity='rare',
+    age=10
 )
 
 Babka1 = Fredde(
@@ -18,7 +19,8 @@ Babka1 = Fredde(
     genid=20,
     gendom=0.8,
     mutrate=0,
-    rarity='common'
+    rarity='common',
+    age=10
 )
 
 Ded2 = Fredde(
@@ -27,7 +29,8 @@ Ded2 = Fredde(
     genid=-30,
     gendom=0.3,
     mutrate=0,
-    rarity='legendary'
+    rarity='legendary',
+    age=10
 )
 
 Babka2 = Fredde(
@@ -36,7 +39,8 @@ Babka2 = Fredde(
     genid=-42,
     gendom=0.8,
     mutrate=0,
-    rarity='mythic'
+    rarity='mythic',
+    age=10
 )
 
 baby = TrySex(Ded1, Babka1)
