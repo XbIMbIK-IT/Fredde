@@ -138,7 +138,8 @@ def SEX(parent1, parent2):
         rarity=babyrarity,
         parents=[parent1, parent2],
         generation=babygeneration,
-        gender=babygender
+        gender=babygender,
+        age=1
     )
 
 
