@@ -3,9 +3,9 @@ from fredde import  Fredde
 import random
 
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
-SEX_AGE = 3
 with open("NameList.txt", 'r') as f:
     NameList = f.read().splitlines()
+SEX_AGE = 3
 
 def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
@@ -124,8 +124,9 @@ def SEX(parent1, parent2):
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
+    babyname = random.choice(NameList)
     return Fredde(
-        name=random.choice(NameList),
+        name=babyname,
         color=babycolor,
         genid=babygenid,
         gendom=babygendom,
