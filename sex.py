@@ -24,7 +24,7 @@ def TrySex(parent1, parent2):
     if parent1.age < SEX_AGE or parent2.age < SEX_AGE:
         return None
 
-    return SEX(parent1, parent2, name)
+    return SEX(parent1, parent2)
 
 def is_inbreeding(parent1, parent2):
     family1 = parent1.family
