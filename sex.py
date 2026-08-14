@@ -4,9 +4,10 @@ import random
 
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
+with open("NameList.txt", 'r') as f:
+    NameList = f.read().splitlines()
 
-
-def TrySex(parent1, parent2, name):
+def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
         return None
 
@@ -32,7 +33,7 @@ def is_inbreeding(parent1, parent2):
     return parent1 in family2 or parent2 in family1 or bool(family1 & family2)
 
 
-def SEX(parent1, parent2, name):
+def SEX(parent1, parent2):
 
     if parent1.generation <= parent2.generation:
         babygeneration = parent2.generation + 1
@@ -124,7 +125,7 @@ def SEX(parent1, parent2, name):
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
     return Fredde(
-        name=name,
+        name=random.choice(NameList),
         color=babycolor,
         genid=babygenid,
         gendom=babygendom,
