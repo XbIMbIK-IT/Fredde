@@ -117,6 +117,16 @@ def SEX(parent1, parent2):
         babygender = 'cf'
     else:
         babygender = 'is'
+
+    # Реснички
+    if babygender == 'boy':
+        eyelash = False
+    elif babygender == 'girl':
+        eyelash = True
+    elif random.random() <= 0.5:
+        eyelash = False
+    else:
+        eyelash = True
     
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
@@ -131,7 +141,8 @@ def SEX(parent1, parent2):
         parents=[parent1, parent2],
         generation=babygeneration,
         gender=babygender,
-        age=1
+        age=1,
+        eyelash=eyelash
     )
 
 
