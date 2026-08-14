@@ -5,7 +5,7 @@ class Fredde:
         self,
         alive=True,
         name='No name',
-        age=1,
+        age=10,
         gender='is', #boy, girl, is (intersex), cf (childfree)
         genid=1,
         gendom=1,
