@@ -59,7 +59,7 @@ def SEX(parent1, parent2, name):
     if random.uniform(0, 100) <= MutRate:
 
         # GenID
-        babygenid *= random.uniform(0.8, 1.2)
+        babygenid *= random.uniform(0.6, 1.4)
 
         # Цвет
         for i in range(3):
@@ -70,13 +70,13 @@ def SEX(parent1, parent2, name):
             )
 
         # Доминантность
-        babygendom *= random.uniform(0.8, 1.2)
+        babygendom *= random.uniform(0.6, 1.3)
         babygendom = max(0, min(1, babygendom))
 
         # Редкость
         rarity_index = RarityList.index(babyrarity)
 
-        if random.random() < 0.5:
+        if random.random() < 0.25:
             rarity_index += 1
         else:
             rarity_index -= 1
