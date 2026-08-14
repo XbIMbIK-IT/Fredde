@@ -40,7 +40,7 @@ class Fredde:
         self.bodyPattern = bodyPattern
         self.eyelash = eyelash
 
-        freddis.append(self)
+        freddies.append(self)
         
     @property
     def family(self):
