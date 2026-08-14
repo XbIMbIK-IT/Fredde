@@ -18,7 +18,8 @@ class Fredde:
         hatAcs='cylinder',
         faceAcs='none',
         eyeAcs='none',
-        bodyPattern='basic'
+        bodyPattern='basic',
+        eyelash=False
     ):
         self.name = name
         self.age = age
@@ -35,6 +36,7 @@ class Fredde:
         self.faceAcs = faceAcs
         self.eyeAcs = eyeAcs
         self.bodyPattern = bodyPattern
+        self.eyelash = eyelash
 
         freddis.append(self)
         
