@@ -4,10 +4,10 @@ import random
 
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
+with open("NameList.txt", 'r') as f:
+        NameList = f.read().splitlines()
 
 def GiveName():
-    with open("NameList.txt", 'r') as f:
-        NameList = f.read().splitlines()
     return random.choice(NameList)
 
 def TrySex(parent1, parent2):
