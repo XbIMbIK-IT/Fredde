@@ -7,8 +7,8 @@ with open("NameList.txt", 'r') as f:
     NameList = f.read().splitlines()
 SEX_AGE = 3
 
-def checkranname():
-    print(random.choice(NameList))
+def GiveName():
+    return random.choice(NameList)
 
 def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
@@ -127,7 +127,7 @@ def SEX(parent1, parent2):
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
-    babyname = random.choice(NameList)
+    babyname = GiveName()
     return Fredde(
         name=babyname,
         color=babycolor,
