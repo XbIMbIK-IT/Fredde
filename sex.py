@@ -6,29 +6,22 @@ with open("NameList.txt", "r", encoding="utf-8") as f:
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
 
-
-
-def GiveName():
-    return random.choice(NameList)
-
 def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
-        return None
+        return None, "Один из родителей мёртв"
 
-    # CF вообще не участвует
     if parent1.gender == 'cf' or parent2.gender == 'cf':
-        return None
+        return None, "CF не может размножаться"
 
-    # IS может с кем угодно
     if parent1.gender == 'is' or parent2.gender == 'is':
         pass
     elif parent1.gender == parent2.gender:
-        return None
+        return None, "Одинаковый пол"
 
     if parent1.age < SEX_AGE or parent2.age < SEX_AGE:
-        return None
+        return None, "Один из родителей слишком молод"
 
-    return SEX(parent1, parent2)
+    return SEX(parent1, parent2), "Успешно"
 
 def is_inbreeding(parent1, parent2):
     family1 = parent1.family
@@ -128,9 +121,8 @@ def SEX(parent1, parent2):
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
-    babyname = GiveName()
     return Fredde(
-        name=babyname,
+        name=random.choice(NameList),
         color=babycolor,
         genid=babygenid,
         gendom=babygendom,
