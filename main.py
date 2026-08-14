@@ -2,6 +2,7 @@ from Fredde import freddies
 from fredde import Fredde
 from sex import TrySex
 import tree
+from step import Step
 
 Ded1 = Fredde(
     'Дедушка',
@@ -62,5 +63,10 @@ if baby:
 
     for name, value in values:
         print(f"{name}: {value}")
+
+Step(freddies)
+Step(freddies)
+
+print(baby.age)
 
 tree.show()
