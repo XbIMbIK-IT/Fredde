@@ -3,7 +3,8 @@ freddis = []
 class Fredde:
     def __init__(
         self,
-        name,
+        alive=True,
+        name='No name',
         age=1,
         gender='is', #boy, girl, is (intersex), cf (childfree)
         genid=1,
@@ -21,6 +22,7 @@ class Fredde:
         bodyPattern='basic',
         eyelash=False
     ):
+        self.alive = alive
         self.name = name
         self.age = age
         self.color = color if color else [255, 185, 107]
