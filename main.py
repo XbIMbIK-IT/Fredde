@@ -43,15 +43,23 @@ Babka2 = Fredde(
     age=10
 )
 
-baby = TrySex(Ded1, Babka1)
+baby, message = TrySex(Ded1, Babka1)
 
-print(baby.name)
-print(baby.gender)
-print(baby.age)
-print(baby.generation)
-print(baby.genid)
-print(baby.gendom)
-print(baby.mutrate)
-print(baby.color)
+print(message)
+
+if baby:
+    values = [
+        ("name", baby.name),
+        ("gender", baby.gender),
+        ("age", baby.age),
+        ("generation", baby.generation),
+        ("genid", baby.genid),
+        ("gendom", baby.gendom),
+        ("mutrate", baby.mutrate),
+        ("color", baby.color)
+    ]
+
+    for name, value in values:
+        print(f"{name}: {value}")
 
 tree.show()
