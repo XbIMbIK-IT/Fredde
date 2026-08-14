@@ -8,7 +8,7 @@ from matplotlib.widgets import Button, Slider
 from matplotlib.patches import Circle, FancyArrowPatch
 from matplotlib.animation import FuncAnimation
 
-from fredde import freddis
+from fredde import freddies
 
 
 # ============================================================
