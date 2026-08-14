@@ -2,7 +2,7 @@ from fredde import freddies
 from fredde import Fredde
 from sex import TrySex
 import tree
-from step import Step
+from simulation import Step
 
 Ded1 = Fredde(
     'Дедушка',
