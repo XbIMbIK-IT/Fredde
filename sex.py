@@ -1,17 +1,15 @@
 from fredde import  Fredde
 import random
-import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(BASE_DIR, "NameList.txt"), "r", encoding="utf-8") as f:
-    NameList = [name.strip() for name in f if name.strip()]
-
-def GiveName():
-    return random.choice(NameList)
-
+with open("NameList.txt", "r", encoding="utf-8") as f:
+    NameList = f.read().splitlines()
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
 
+
+
+def GiveName():
+    return random.choice(NameList)
 
 def TrySex(parent1, parent2):
     if not parent1.alive or not parent2.alive:
