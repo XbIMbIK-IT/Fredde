@@ -1,4 +1,4 @@
-from Fredde import freddies
+from fredde import freddies
 from fredde import Fredde
 from sex import TrySex
 import tree
