@@ -3,11 +3,11 @@ from fredde import  Fredde
 import random
 
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
-with open("NameList.txt", 'r') as f:
-    NameList = f.read().splitlines()
 SEX_AGE = 3
 
 def GiveName():
+    with open("NameList.txt", 'r') as f:
+        NameList = f.read().splitlines()
     return random.choice(NameList)
 
 def TrySex(parent1, parent2):
