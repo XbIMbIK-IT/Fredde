@@ -1,15 +1,11 @@
 import random
 from fredde import Fredde
-from sex import SEX
+from sex import TrySex
 import tree
-
-with open("NameList.txt", 'r') as f:
-    NameList = f.read().splitlines()
-
 
 Ded1 = Fredde(
     'Дедушка',
-    color=[255, 20, 0],
+    color=[180, 200, 30],
     genid=10,
     gendom=0.3,
     mutrate=0,
@@ -18,7 +14,7 @@ Ded1 = Fredde(
 
 Babka1 = Fredde(
     'Бабушка',
-    color=[40, 0, 200],
+    color=[40, 0, 135],
     genid=20,
     gendom=0.8,
     mutrate=0,
@@ -43,18 +39,15 @@ Babka2 = Fredde(
     rarity='mythic'
 )
 
-Fred1 = SEX(Ded1, Babka1, random.choice(NameList))
-
-Fred2 = SEX(Ded2, Babka2, random.choice(NameList))
-
-baby = SEX(Fred1, Fred2, random.choice(NameList))
+baby = TrySex(Ded1, Babka1)
 
 print(baby.name)
+print(baby.gender)
+print(baby.age)
 print(baby.generation)
 print(baby.genid)
 print(baby.gendom)
 print(baby.mutrate)
 print(baby.color)
-print(baby.rarity)
 
 tree.show()
