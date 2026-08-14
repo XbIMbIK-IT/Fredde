@@ -51,6 +51,7 @@ if baby:
     values = [
         ("name", baby.name),
         ("gender", baby.gender),
+        ("eyelashes", baby.eyelash),
         ("age", baby.age),
         ("generation", baby.generation),
         ("genid", baby.genid),
