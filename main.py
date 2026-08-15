@@ -3,6 +3,8 @@ from fredde import fredde
 from sex import trySex
 import tree
 from simulation import step
+from freddePhoto import show_fredde
+from freddePhoto import save_fredde
 
 Ded1 = fredde(
     name='Дедушка',
@@ -68,4 +70,6 @@ if baby:
 # step(freddies)
 # print(baby.age)
 
-tree.show()
+show_fredde(baby)
+
+# tree.show()
