@@ -76,12 +76,23 @@ Huskar
 Lina
 Luna
 Lona
+Chen
 Naga
 Magnus
 Hikaru
 Bodvar
 Oholera
 Isaac
+Magdaline
+Cain
+Judas
+Eve
+Samson
+Azazel
+Lazarus
+Eden
+Lilith
+Appolyon
 Maphlas
 Sashenka
 Kirk
@@ -122,3 +133,5 @@ Yaderny Reaktor
 Geniy Orgiy
 Abubachir Trahov
 PenisPeek
+E16
+
