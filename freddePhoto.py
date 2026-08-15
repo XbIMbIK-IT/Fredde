@@ -1,5 +1,5 @@
 from pathlib import Path
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageChops
 import tkinter as tk
 
 
