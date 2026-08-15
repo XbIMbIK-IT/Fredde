@@ -75,9 +75,9 @@ def show():
     plt.rcParams["toolbar"] = "None"
 
     G = nx.DiGraph()
-    for f in freddis:
+    for f in freddies:
         G.add_node(f)
-    for child in freddis:
+    for child in freddies:
         for parent in child.parents:
             G.add_edge(parent, child)
 
