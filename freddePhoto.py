@@ -47,12 +47,6 @@ def generate_fredde(fred):
             sprite("misc", "eyelashes")
         )
 
-    # аксессуар на голову
-    if fred.hatAcs != "none":
-        result.alpha_composite(
-            sprite("hatAcs", fred.hatAcs)
-        )
-
     # аксессуар на глаза
     if fred.eyeAcs != "none":
         result.alpha_composite(
@@ -64,6 +58,13 @@ def generate_fredde(fred):
         result.alpha_composite(
             sprite("faceAcs", fred.faceAcs)
         )
+
+    # аксессуар на голову
+    if fred.hatAcs != "none":
+        result.alpha_composite(
+            sprite("hatAcs", fred.hatAcs)
+        )
+
 
     return result
 
