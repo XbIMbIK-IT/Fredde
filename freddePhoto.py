@@ -14,18 +14,21 @@ def sprite(folder, name):
 
 def generate_fredde(fred):
     # тело
-    pattern = sprite("bodyPattern", fred.bodyPattern).convert("L")
-
+    pattern = sprite(
+        "bodyPattern",
+        fred.bodyPattern
+    )
     color = Image.new(
         "RGBA",
         pattern.size,
         (*fred.color, 255)
     )
-
-    result = Image.composite(
-        color,
-        Image.new("RGBA", pattern.size),
-        pattern
+    result = ImageChops.multiply(
+        pattern,
+        color
+    )
+    result.putalpha(
+        pattern.getchannel("A")
     )
 
     # рот
