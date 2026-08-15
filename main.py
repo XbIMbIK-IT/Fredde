@@ -1,10 +1,10 @@
 from fredde import freddies
-from fredde import Fredde
-from sex import TrySex
+from fredde import fredde
+from sex import trySex
 import tree
-from simulation import Step
+from simulation import step
 
-Ded1 = Fredde(
+Ded1 = fredde(
     'Дедушка',
     color=[180, 200, 30],
     genid=10,
@@ -14,7 +14,7 @@ Ded1 = Fredde(
     age=10
 )
 
-Babka1 = Fredde(
+Babka1 = fredde(
     'Бабушка',
     color=[40, 0, 135],
     genid=20,
@@ -24,7 +24,7 @@ Babka1 = Fredde(
     age=10
 )
 
-Ded2 = Fredde(
+Ded2 = fredde(
     'Другой дедушка',
     color=[55, 0, 0],
     genid=-30,
@@ -34,7 +34,7 @@ Ded2 = Fredde(
     age=10
 )
 
-Babka2 = Fredde(
+Babka2 = fredde(
     'Другая бабушка',
     color=[255, 0, 70],
     genid=-42,
@@ -44,7 +44,7 @@ Babka2 = Fredde(
     age=10
 )
 
-baby, message = TrySex(Ded1, Babka1)
+baby, message = trySex(Ded1, Babka1)
 
 print(message)
 
@@ -64,8 +64,8 @@ if baby:
     for name, value in values:
         print(f"{name}: {value}")
 
-Step(freddies)
-Step(freddies)
+step(freddies)
+step(freddies)
 
 print(baby.age)
 
