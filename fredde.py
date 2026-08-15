@@ -1,6 +1,6 @@
 freddies = []
 
-class Fredde:
+class fredde:
     def __init__(
         self,
         alive=True,
