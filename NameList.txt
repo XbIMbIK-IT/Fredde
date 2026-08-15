@@ -143,11 +143,24 @@ Moloko
 Hleb
 Kartoshka
 Pomidor
+Kapusta
+Morkovka
+Ketchup
+Burger
+ChickenBurger
+Chips
+SSD
+HDMI
+SDVG
 Mahito
 Pivo
 Vodka
 BloodyMary
 Mandatka Krylataya
+Vodyanoy Clash
+Kartofel S Razdavlenoy Kabinoy
+Krapivo
+Chelsea
 Shadow
 Light
 Demon
@@ -159,3 +172,17 @@ Baran
 Ganduras
 Verity
 El Macho
+Medved Shatun
+Kovarnoe Sushestvo Snegach Zubaty
+Lesnoy Pauk Chernaya Plyamba
+Zmeya Podyaichniy Vypolzok
+Zubasyi Mudofil
+Mozart
+Bach
+Ludwig van Beethoven
+Rucorero
+Kirashon
+Ded1
+Babka1
+Terentiy
+Zlojyr
