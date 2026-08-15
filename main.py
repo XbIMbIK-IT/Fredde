@@ -5,7 +5,7 @@ import tree
 from simulation import step
 
 Ded1 = fredde(
-    'Дедушка',
+    name='Дедушка',
     color=[180, 200, 30],
     genid=10,
     gendom=0.3,
@@ -15,7 +15,7 @@ Ded1 = fredde(
 )
 
 Babka1 = fredde(
-    'Бабушка',
+    name='Бабушка',
     color=[40, 0, 135],
     genid=20,
     gendom=0.8,
@@ -25,7 +25,7 @@ Babka1 = fredde(
 )
 
 Ded2 = fredde(
-    'Другой дедушка',
+    name='Другой дедушка',
     color=[55, 0, 0],
     genid=-30,
     gendom=0.3,
@@ -35,7 +35,7 @@ Ded2 = fredde(
 )
 
 Babka2 = fredde(
-    'Другая бабушка',
+    name='Другая бабушка',
     color=[255, 0, 70],
     genid=-42,
     gendom=0.8,
@@ -64,9 +64,8 @@ if baby:
     for name, value in values:
         print(f"{name}: {value}")
 
-step(freddies)
-step(freddies)
-
-print(baby.age)
+# step(freddies)
+# step(freddies)
+# print(baby.age)
 
 tree.show()
