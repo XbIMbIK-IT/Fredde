@@ -2,7 +2,7 @@ import random
 
 MAX_AGE = 25
 
-def CheckDeath(freddies):
+def checkDeath(freddies):
     for freddie in freddies:
         if freddie.alive:
             max_age = MAX_AGE * (1 - freddie.MutRate / 100)
@@ -12,8 +12,8 @@ def CheckDeath(freddies):
                     freddie.alive = False
 
 
-def Step(freddies):
-    CheckDeath(freddies)
+def step(freddies):
+    checkDeath(freddies)
 
     for freddie in freddies:
         if freddie.alive:
