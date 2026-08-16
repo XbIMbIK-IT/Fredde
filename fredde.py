@@ -1,10 +1,16 @@
+import random
+
+
+with open("NameList.txt", "r", encoding="utf-8") as f:
+    NAME_LIST = f.read().splitlines()
+
 freddies = []
 
 class Fredde:
     def __init__(
         self,
         alive=True,
-        name='No name',
+        name=None,
         age=1,
         gender='is', #boy, girl, is (intersex), cf (childfree)
         genid=1,
@@ -23,7 +29,7 @@ class Fredde:
         eyelash=False
     ):
         self.alive = alive
-        self.name = name
+        self.name = name if name else random.choice(NAME_LIST)
         self.age = age
         self.color = color if color else [255, 185, 107]
         self.genid = genid

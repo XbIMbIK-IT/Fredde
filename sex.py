@@ -1,9 +1,10 @@
 from fredde import  Fredde
 import random
 
-with open("NameList.txt", "r", encoding="utf-8") as f:
-    NameList = f.read().splitlines()
+
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
+
+
 SEX_AGE = 3
 
 def try_sex(parent1, parent2):
@@ -132,7 +133,6 @@ def sex(parent1, parent2):
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate,1)
     return Fredde(
-        name=random.choice(NameList),
         color=babycolor,
         genid=babygenid,
         gendom=babygendom,
@@ -141,7 +141,6 @@ def sex(parent1, parent2):
         parents=[parent1, parent2],
         generation=babygeneration,
         gender=babygender,
-        age=1,
         eyelash=eyelash
     )
 
