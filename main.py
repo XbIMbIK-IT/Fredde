@@ -1,12 +1,12 @@
 from fredde import freddies
-from fredde import fredde
-from sex import trySex
+from fredde import Fredde
+from sex import try_sex
 import tree
 from simulation import step
 from freddePhoto import show_fredde
 from freddePhoto import save_fredde
 
-Ded1 = fredde(
+Ded1 = Fredde(
     name='Дедушка',
     color=[180, 200, 30],
     genid=10,
@@ -16,7 +16,7 @@ Ded1 = fredde(
     age=10
 )
 
-Babka1 = fredde(
+Babka1 = Fredde(
     name='Бабушка',
     color=[40, 0, 135],
     genid=20,
@@ -26,7 +26,7 @@ Babka1 = fredde(
     age=10
 )
 
-Ded2 = fredde(
+Ded2 = Fredde(
     name='Другой дедушка',
     color=[55, 0, 0],
     genid=-30,
@@ -36,7 +36,7 @@ Ded2 = fredde(
     age=10
 )
 
-Babka2 = fredde(
+Babka2 = Fredde(
     name='Другая бабушка',
     color=[255, 0, 70],
     genid=-42,
@@ -46,7 +46,7 @@ Babka2 = fredde(
     age=10
 )
 
-baby, message = trySex(Ded1, Babka1)
+baby, message = try_sex(Ded1, Babka1)
 
 print(message)
 
