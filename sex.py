@@ -1,4 +1,4 @@
-from fredde import  Fredde
+from fredde import fredde
 import random
 
 
