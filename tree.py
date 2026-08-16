@@ -5,10 +5,12 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider
-from matplotlib.patches import Circle, FancyArrowPatch
+from matplotlib.patches import Circle
+from matplotlib.collections import LineCollection
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib.animation import FuncAnimation
-
 from fredde import freddies
+from freddePhoto import generate_fredde
 
 
 # ============================================================
@@ -22,12 +24,11 @@ TEXT_COLOR     = "#dcddde"   # цвет имени узла
 GEN_TEXT_COLOR = "#75787f"   # цвет подписи поколения под узлом
 ACCENT_COLOR   = "#7289da"   # обводка узла при перетаскивании / акцент слайдеров
 
-NODE_RADIUS = 0.16
+NODE_RADIUS = 0.16          # хитбокс узла (в данных координатах, для клика/наведения)
+SPRITE_ZOOM = 0.35           # масштаб картинки фредика (подберите под размер ваших PNG)
 
 # ============================================================
 #  ФИЗИКА (аналог "force graph" в Obsidian), регулируется ползунками.
-#  gen_pull специально слабый: поколения задают лишь лёгкий вертикальный
-#  дрейф, а не жёсткие ряды — иначе граф превращается в застывшее дерево.
 # ============================================================
 DEFAULT_PARAMS = {
     "repulsion":   1.15,
@@ -41,7 +42,6 @@ DEFAULT_PARAMS = {
 }
 
 SLIDERS = [
-    # (ключ,          подпись,                  min,   max)
     ("repulsion",     "Отталкивание узлов",     0.1,   3.0),
     ("spring_len",    "Длина связи",            0.5,   4.0),
     ("spring_k",      "Жёсткость связи",        0.0,   0.12),
@@ -52,15 +52,17 @@ SLIDERS = [
     ("dt",            "Скорость симуляции",     0.1,   1.5),
 ]
 
-GEN_HEIGHT = 2.6   # вертикальный шаг между "домашними" линиями поколений
+GEN_HEIGHT = 2.6
 
 DRAG_CATCH_RADIUS = 0.34
-FRAME_INTERVAL_MS = 16   # ~60 fps
+FRAME_INTERVAL_MS = 16   # ~60 fps, пока симуляция "бодрствует"
 
-# анимация поэтапного появления при пересборке (как в Obsidian: узлы
-# всплывают по одному, затем прорисовываются связи)
 REVEAL_FRAMES_PER_NODE = 3
 REVEAL_FRAMES_PER_EDGE = 1
+
+# ---------- усыпление симуляции, когда всё устаканилось ----------
+SLEEP_MOVE_EPS = 0.0006     # порог макс. смещения узла за кадр, ниже которого считаем "тихо"
+SLEEP_FRAMES_NEEDED = 90    # сколько подряд "тихих" кадров нужно, чтобы уснуть (~1.5 сек)
 
 # ---------- геометрия выезжающей панели настроек ----------
 PANEL_WIDTH       = 0.24
@@ -69,6 +71,13 @@ PANEL_HEIGHT_FRAC = 0.86
 PANEL_OPEN_X      = 0.73
 PANEL_CLOSED_X    = 1.03
 PANEL_EASE        = 0.25
+
+GENDER_LABELS = {
+    "boy": "мальчик",
+    "girl": "девочка",
+    "is": "интерсекс",
+    "cf": "чайлдфри",
+}
 
 
 def show():
@@ -103,10 +112,11 @@ def show():
     def gen_y(gen):
         return -gen * GEN_HEIGHT
 
-    gen_target_y = np.array([gen_y(node.generation) for node in nodes])
+    gen_target_y = np.array([gen_y(node.generation) for node in nodes], dtype=float)
 
     # ---------- Начальные позиции (numpy) ----------
     pos = np.zeros((n, 2))
+    prev_pos = np.zeros((n, 2))
     vel = np.zeros((n, 2))
     dragged_mask = np.zeros(n, dtype=bool)
 
@@ -120,6 +130,7 @@ def show():
                 vel[idx] = 0.0
 
     layout_by_generation(DEFAULT_PARAMS["spring_len"], 0.4, 0.3)
+    prev_pos[:] = pos
 
     max_width = max((len(v) for v in generations.values()), default=1)
     x_limit = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) + 3.0
@@ -136,7 +147,82 @@ def show():
         pass
     plt.subplots_adjust(bottom=0.1, left=0.03, right=0.97, top=0.94)
 
+    ax.set_title("Генеалогическое древо", color=TEXT_COLOR, fontsize=14, pad=14)
+    ax.set_xlim(-x_limit, x_limit)
+    ax.set_ylim(y_bottom, y_top)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_axis_off()
+
     dragged_idx = {"i": None}
+
+    # ---------------------------------------------------------
+    #  СПРАЙТЫ ФРЕДИКОВ (генерируются один раз, не каждый кадр!)
+    # ---------------------------------------------------------
+    def color_of(node):
+        r, g, b = node.color[:3]
+        return tuple(max(0, min(255, c)) / 255 for c in (r, g, b))
+
+    sprite_arrays = [None] * n
+    for i, node in enumerate(nodes):
+        try:
+            img = generate_fredde(node)
+            sprite_arrays[i] = np.asarray(img)
+        except Exception as e:
+            print(f"Не удалось сгенерировать спрайт для {node.name}: {e}")
+            sprite_arrays[i] = None
+
+    # ---------------------------------------------------------
+    #  ПОСТОЯННЫЕ ARTIST'Ы (создаются один раз, дальше только двигаются)
+    # ---------------------------------------------------------
+    edge_collection = LineCollection([], colors=EDGE_COLOR, linewidths=1.6, alpha=0.8, zorder=1)
+    ax.add_collection(edge_collection)
+
+    halo_circles = []
+    image_boxes = []
+    fallback_dots = []   # если спрайт не сгенерировался - запасной кружок
+    name_texts = []
+    gen_texts = []
+
+    for i, node in enumerate(nodes):
+        color = color_of(node)
+
+        halo = Circle((0, 0), 0.30, color=color, alpha=0.16, zorder=2, linewidth=0)
+        halo.set_visible(False)
+        ax.add_patch(halo)
+        halo_circles.append(halo)
+
+        if sprite_arrays[i] is not None:
+            oi = OffsetImage(sprite_arrays[i], zoom=SPRITE_ZOOM)
+            ab = AnnotationBbox(
+                oi, (0, 0), frameon=False, pad=0.0, zorder=3, box_alignment=(0.5, 0.5)
+            )
+            ab.set_visible(False)
+            ax.add_artist(ab)
+            image_boxes.append(ab)
+            fallback_dots.append(None)
+        else:
+            image_boxes.append(None)
+            dot = Circle((0, 0), NODE_RADIUS, facecolor=color, edgecolor="#ffffff",
+                         linewidth=1.1, zorder=3)
+            dot.set_visible(False)
+            ax.add_patch(dot)
+            fallback_dots.append(dot)
+
+        nt = ax.text(0, 0, node.name, color=TEXT_COLOR, fontsize=9, fontweight="bold",
+                     ha="center", va="bottom", zorder=4, visible=False)
+        name_texts.append(nt)
+
+        gt = ax.text(0, 0, f"Поколение {node.generation}", color=GEN_TEXT_COLOR,
+                     fontsize=7, ha="center", va="top", zorder=4, visible=False)
+        gen_texts.append(gt)
+
+    tooltip = ax.annotate(
+        "", xy=(0, 0), xytext=(14, 14), textcoords="offset points",
+        va="bottom", ha="left", fontsize=8.5, color=TEXT_COLOR, zorder=20,
+        bbox=dict(boxstyle="round,pad=0.5", facecolor=PANEL_COLOR, edgecolor=ACCENT_COLOR, alpha=0.95),
+    )
+    tooltip.set_visible(False)
+    hover_state = {"i": None}
 
     # ---------------------------------------------------------
     #  ПОЭТАПНОЕ ПОЯВЛЕНИЕ (узлы, потом связи)
@@ -145,10 +231,24 @@ def show():
         "active": False,
         "frame": 0,
         "node_order": list(range(n)),
-        "node_i": n,
+        "node_i": 0,
         "edge_order": list(range(len(edges))),
-        "edge_i": len(edges),
+        "edge_i": 0,
     }
+    revealed_edge_parent = np.array([], dtype=int)
+    revealed_edge_child = np.array([], dtype=int)
+
+    def hide_everything():
+        for arr in (halo_circles, name_texts, gen_texts):
+            for artist in arr:
+                artist.set_visible(False)
+        for ab in image_boxes:
+            if ab is not None:
+                ab.set_visible(False)
+        for dot in fallback_dots:
+            if dot is not None:
+                dot.set_visible(False)
+        edge_collection.set_segments([])
 
     def start_reveal():
         order = list(range(n))
@@ -156,25 +256,50 @@ def show():
         eorder = list(range(len(edges)))
         random.shuffle(eorder)
         reveal.update(active=True, frame=0, node_order=order, node_i=0, edge_order=eorder, edge_i=0)
+        hide_everything()
+
+    def reveal_node(i):
+        halo_circles[i].set_visible(True)
+        name_texts[i].set_visible(True)
+        gen_texts[i].set_visible(True)
+        if image_boxes[i] is not None:
+            image_boxes[i].set_visible(True)
+        if fallback_dots[i] is not None:
+            fallback_dots[i].set_visible(True)
 
     def advance_reveal():
+        nonlocal revealed_edge_parent, revealed_edge_child
         if not reveal["active"]:
             return
         reveal["frame"] += 1
+
         if reveal["node_i"] < n:
             if reveal["frame"] % REVEAL_FRAMES_PER_NODE == 0:
+                idx = reveal["node_order"][reveal["node_i"]]
+                reveal_node(idx)
                 reveal["node_i"] += 1
         elif reveal["edge_i"] < len(edges):
             if reveal["frame"] % REVEAL_FRAMES_PER_EDGE == 0:
                 reveal["edge_i"] += 1
+                shown = reveal["edge_order"][:reveal["edge_i"]]
+                revealed_edge_parent = parent_idx[shown]
+                revealed_edge_child = child_idx[shown]
         else:
             reveal["active"] = False
 
+    def reveal_all_immediately():
+        nonlocal revealed_edge_parent, revealed_edge_child
+        reveal.update(active=False, node_i=n, edge_i=len(edges))
+        for i in range(n):
+            reveal_node(i)
+        revealed_edge_parent = parent_idx
+        revealed_edge_child = child_idx
+
     # ---------------------------------------------------------
-    #  ФИЗИКА (векторизовано на numpy — быстрее и компактнее)
+    #  ФИЗИКА (векторизовано на numpy)
     # ---------------------------------------------------------
     def compute_forces():
-        diff = pos[:, None, :] - pos[None, :, :]           # (n, n, 2)
+        diff = pos[:, None, :] - pos[None, :, :]
         dist_sq = np.sum(diff * diff, axis=-1)
         np.fill_diagonal(dist_sq, np.inf)
         dist = np.sqrt(dist_sq)
@@ -201,7 +326,8 @@ def show():
 
         forces[:, 1] += (gen_target_y - pos[:, 1]) * params["gen_pull"]
         forces[:, 0] += -pos[:, 0] * params["center_pull"]
-        forces += np.random.uniform(-params["jitter"], params["jitter"], size=(n, 2))
+        if params["jitter"] > 0:
+            forces += np.random.uniform(-params["jitter"], params["jitter"], size=(n, 2))
         return forces
 
     def step_physics():
@@ -212,65 +338,36 @@ def show():
         pos[free] += vel[free] * dt
 
     # ---------------------------------------------------------
-    #  ОТРИСОВКА
+    #  ОБНОВЛЕНИЕ ПОЗИЦИЙ У УЖЕ СУЩЕСТВУЮЩИХ ARTIST'ОВ
+    #  (никакого ax.clear() / пересоздания патчей - в этом и была причина лагов)
     # ---------------------------------------------------------
-    def color_of(node):
-        r, g, b = node.color[:3]
-        return tuple(max(0, min(255, c)) / 255 for c in (r, g, b))
-
-    def draw_graph():
-        ax.clear()
-        ax.set_facecolor(BG_COLOR)
-
-        visible_nodes = set(reveal["node_order"][:reveal["node_i"]])
-        visible_edges = set(reveal["edge_order"][:reveal["edge_i"]])
-
-        for e_i in visible_edges:
-            p_i, c_i = parent_idx[e_i], child_idx[e_i]
-            x1, y1 = pos[p_i]
-            x2, y2 = pos[c_i]
-            ax.add_patch(FancyArrowPatch(
-                (x1, y1), (x2, y2),
-                connectionstyle="arc3,rad=0.0",
-                arrowstyle="-|>",
-                mutation_scale=13,
-                color=EDGE_COLOR,
-                linewidth=1.6,
-                alpha=0.8,
-                zorder=1,
-                shrinkA=16, shrinkB=16,
-            ))
-
-        for i in visible_nodes:
-            node = nodes[i]
+    def update_artists():
+        for i in range(n):
             x, y = pos[i]
-            color = color_of(node)
-            is_dragged = dragged_idx["i"] == i
+            if halo_circles[i].get_visible():
+                halo_circles[i].center = (x, y)
+            ab = image_boxes[i]
+            if ab is not None and ab.get_visible():
+                ab.xybox = (x, y)
+                ab.xy = (x, y)
+            dot = fallback_dots[i]
+            if dot is not None and dot.get_visible():
+                dot.center = (x, y)
+                dot.set_edgecolor(ACCENT_COLOR if dragged_idx["i"] == i else "#ffffff")
+                dot.set_linewidth(2.2 if dragged_idx["i"] == i else 1.1)
+            if name_texts[i].get_visible():
+                name_texts[i].set_position((x, y + 0.30))
+            if gen_texts[i].get_visible():
+                gen_texts[i].set_position((x, y - 0.30))
 
-            for radius, alpha in ((0.34, 0.10), (0.27, 0.16), (0.21, 0.22)):
-                ax.add_patch(Circle((x, y), radius, color=color, alpha=alpha, zorder=2, linewidth=0))
-
-            ax.add_patch(Circle(
-                (x, y), NODE_RADIUS, facecolor=color, zorder=3,
-                edgecolor=(ACCENT_COLOR if is_dragged else "#ffffff"),
-                linewidth=2.2 if is_dragged else 1.1,
-            ))
-
-            ax.text(x, y + 0.30, node.name, color=TEXT_COLOR, fontsize=9,
-                    fontweight="bold", ha="center", va="bottom", zorder=4)
-            ax.text(x, y - 0.30, f"Поколение {node.generation}", color=GEN_TEXT_COLOR,
-                    fontsize=7, ha="center", va="top", zorder=4)
-
-        ax.set_title("Генеалогическое древо", color=TEXT_COLOR, fontsize=14, pad=14)
-        ax.set_xlim(-x_limit, x_limit)
-        ax.set_ylim(y_bottom, y_top)
-        # фиксируем пропорции 1:1, чтобы кружки оставались круглыми
-        # при любом изменении размеров окна
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_axis_off()
+        if len(revealed_edge_parent):
+            segs = np.stack([pos[revealed_edge_parent], pos[revealed_edge_child]], axis=1)
+            edge_collection.set_segments(segs)
+        else:
+            edge_collection.set_segments([])
 
     # ---------------------------------------------------------
-    #  ПЕРЕТАСКИВАНИЕ МЫШЬЮ
+    #  НАВЕДЕНИЕ МЫШЬЮ - ПОДСКАЗКА СО СТАТИСТИКОЙ
     # ---------------------------------------------------------
     def find_node(x, y):
         if x is None or y is None:
@@ -279,6 +376,54 @@ def show():
         i = int(np.argmin(dist))
         return i if dist[i] < DRAG_CATCH_RADIUS else None
 
+    def tooltip_text(node):
+        gender = GENDER_LABELS.get(node.gender, node.gender)
+        status = "жив" if node.alive else "мёртв"
+        return (
+            f"{node.name}\n"
+            f"Статус: {status}\n"
+            f"Поколение: {node.generation}\n"
+            f"Возраст: {node.age}\n"
+            f"Пол: {gender}\n"
+            f"Редкость: {node.rarity}\n"
+            f"GenID/GenDom: {node.genid}/{node.gendom}\n"
+            f"Мутация: {node.mutrate}%"
+        )
+
+    def update_hover(i):
+        if hover_state["i"] == i:
+            if i is not None:
+                x, y = pos[i]
+                tooltip.xy = (x, y)
+            return
+        hover_state["i"] = i
+        if i is None:
+            tooltip.set_visible(False)
+        else:
+            node = nodes[i]
+            tooltip.set_text(tooltip_text(node))
+            x, y = pos[i]
+            tooltip.xy = (x, y)
+            tooltip.set_visible(True)
+        fig.canvas.draw_idle()
+
+    # ---------------------------------------------------------
+    #  СОН / ПРОБУЖДЕНИЕ АНИМАЦИИ (главная оптимизация лагов в простое)
+    # ---------------------------------------------------------
+    sleep_state = {"asleep": False, "quiet_frames": 0}
+    anim_ref = {}
+
+    def wake():
+        sleep_state["quiet_frames"] = 0
+        if sleep_state["asleep"]:
+            sleep_state["asleep"] = False
+            anim = anim_ref.get("anim")
+            if anim is not None:
+                anim.event_source.start()
+
+    # ---------------------------------------------------------
+    #  ПЕРЕТАСКИВАНИЕ МЫШЬЮ
+    # ---------------------------------------------------------
     def on_press(event):
         if event.inaxes != ax or event.xdata is None or event.ydata is None:
             return
@@ -287,12 +432,18 @@ def show():
         if i is not None:
             dragged_mask[i] = True
             vel[i] = 0.0
+            wake()
 
     def on_motion(event):
         i = dragged_idx["i"]
-        if i is None or event.inaxes != ax or event.xdata is None or event.ydata is None:
+        if i is not None:
+            if event.inaxes == ax and event.xdata is not None and event.ydata is not None:
+                pos[i] = (event.xdata, event.ydata)
             return
-        pos[i] = (event.xdata, event.ydata)
+        if event.inaxes != ax:
+            update_hover(None)
+            return
+        update_hover(find_node(event.xdata, event.ydata))
 
     def on_release(event):
         i = dragged_idx["i"]
@@ -305,12 +456,14 @@ def show():
     fig.canvas.mpl_connect("button_release_event", on_release)
 
     # ---------------------------------------------------------
-    #  КНОПКА "ПЕРЕСОБРАТЬ" — новая раскладка + каскадное появление
+    #  КНОПКА "ПЕРЕСОБРАТЬ"
     # ---------------------------------------------------------
     def regenerate(event):
         layout_by_generation(params["spring_len"], 0.5, 0.4)
+        prev_pos[:] = pos
         vel[:] = np.random.uniform(-0.6, 0.6, size=(n, 2))
         start_reveal()
+        wake()
 
     button_ax = fig.add_axes([0.77, 0.015, 0.2, 0.055])
     button_ax.set_facecolor(PANEL_COLOR)
@@ -320,8 +473,7 @@ def show():
     regenerate_button.on_clicked(regenerate)
 
     # ---------------------------------------------------------
-    #  ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАСТРОЕК (как шестерёнка в Obsidian).
-    #  По умолчанию панель закрыта (спрятана за правым краем окна).
+    #  ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАСТРОЕК
     # ---------------------------------------------------------
     panel_state = {"x": PANEL_CLOSED_X, "target_x": PANEL_CLOSED_X, "open": False}
 
@@ -338,8 +490,8 @@ def show():
     title_text = fig.text(title_open_x, title_y, "Параметры симуляции",
                            color=TEXT_COLOR, fontsize=11, fontweight="bold", zorder=11)
 
-    slider_axes_info = []   # (ax, open_x, y, w, h)
-    label_texts_info = []   # (text_obj, open_x, y)
+    slider_axes_info = []
+    label_texts_info = []
     sliders = []
 
     row_top = PANEL_BOTTOM + PANEL_HEIGHT_FRAC - 0.11
@@ -348,6 +500,7 @@ def show():
 
     def update_param(key, val):
         params[key] = val
+        wake()
 
     for idx, (key, label, vmin, vmax) in enumerate(SLIDERS):
         y = row_top - idx * row_gap
@@ -379,7 +532,13 @@ def show():
     reset_button = Button(reset_button_ax, "Сбросить настройки", color=PANEL_HOVER, hovercolor=ACCENT_COLOR)
     reset_button.label.set_color(TEXT_COLOR)
     reset_button.label.set_fontsize(8.5)
-    reset_button.on_clicked(lambda event: [s.reset() for s in sliders])
+
+    def do_reset(event):
+        for s in sliders:
+            s.reset()
+        wake()
+
+    reset_button.on_clicked(do_reset)
 
     def sync_panel_positions():
         delta = panel_state["x"] - PANEL_OPEN_X
@@ -391,13 +550,12 @@ def show():
             txt.set_position((open_x + delta, y))
         reset_button_ax.set_position([reset_open_x + delta, reset_y, reset_w, reset_h])
 
-    # приводим панель и все её элементы в закрытое состояние сразу,
-    # до первого кадра — иначе слайдеры на миг "висят в воздухе"
     sync_panel_positions()
 
     def toggle_panel(event):
         panel_state["open"] = not panel_state["open"]
         panel_state["target_x"] = PANEL_OPEN_X if panel_state["open"] else PANEL_CLOSED_X
+        wake()
 
     gear_button_ax = fig.add_axes([0.955, 0.925, 0.038, 0.05])
     gear_button = Button(gear_button_ax, "⚙", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
@@ -409,20 +567,38 @@ def show():
     #  ЦИКЛ АНИМАЦИИ
     # ---------------------------------------------------------
     def animate(frame):
+        prev_pos[:] = pos
         step_physics()
         advance_reveal()
-        draw_graph()
+        update_artists()
 
-        if panel_state["x"] != panel_state["target_x"]:
+        panel_moving = panel_state["x"] != panel_state["target_x"]
+        if panel_moving:
             panel_state["x"] += (panel_state["target_x"] - panel_state["x"]) * PANEL_EASE
             if abs(panel_state["target_x"] - panel_state["x"]) < 0.0015:
                 panel_state["x"] = panel_state["target_x"]
             sync_panel_positions()
 
+        # --- проверяем, не пора ли уснуть ---
+        max_move = np.max(np.hypot(*(pos - prev_pos).T)) if n else 0.0
+        busy = reveal["active"] or panel_moving or dragged_idx["i"] is not None
+        if not busy and max_move < SLEEP_MOVE_EPS:
+            sleep_state["quiet_frames"] += 1
+            if sleep_state["quiet_frames"] >= SLEEP_FRAMES_NEEDED:
+                sleep_state["asleep"] = True
+                anim_ref["anim"].event_source.stop()
+        else:
+            sleep_state["quiet_frames"] = 0
+
         return []
 
-    draw_graph()
+    reveal_all_immediately()
+    update_artists()
     anim = FuncAnimation(fig, animate, interval=FRAME_INTERVAL_MS, cache_frame_data=False)
+    anim_ref["anim"] = anim
     fig._tree_animation_ref = anim
+
+    # первая раскладка сразу с каскадным появлением, красоты ради
+    regenerate(None)
 
     plt.show()
