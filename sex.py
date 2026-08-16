@@ -141,7 +141,7 @@ def sex(parent1, parent2):
         eyelash = True
     
 
-    return Fredde(
+    return fredde(
         color=color,
         genid=genid,
         gendom=gendom,
