@@ -226,6 +226,15 @@ Jane
 Stariy Bog
 Carl
 MaryDay
+Miracle
+Yatoro
+Satanic
+Watson
+Topson
+Iseedeadpeople
+Skitter
+KingJungles
+Ame
 Valentine
 Trisha
 Homyak 
@@ -288,6 +297,7 @@ Frieren
 Nagatoro
 Hori
 Bocchi
+Trista
 Boichi
 Mio
 Chizuru
@@ -297,7 +307,6 @@ Mmegumin
 Asuka
 Rei
 Thoru
-Trista
 Ivy
 Chika
 Lemon
@@ -388,6 +397,7 @@ Sebastian
 Jack
 Owen
 Leo
+Chetyrista
 Matthew
 Asher
 Elias
@@ -397,7 +407,6 @@ John
 Luke
 Julian
 Levi
-Chetyrista
 Gabriel
 Anthony
 Dylan
@@ -488,6 +497,7 @@ Drunk Fredde
 High Fredde
 Broke Fredde
 Rich Fredde
+Pyatsot
 Homeless Fredde
 Crackhead Fredde
 Femboy Fredde
@@ -497,7 +507,6 @@ Alpha Fredde
 Beta Fredde
 Incel Fredde
 Virgin Fredde
-Pyatsot
 Divorced Fredde
 Married Fredde
 Single Fredde
@@ -541,3 +550,62 @@ Nitika
 Smatana
 Tank
 Otec rama
+Suzuka
+Scarlet
+Grass
+El Condor Pasa
+McQueen
+Agnes
+Manhattan
+Shakur
+Sakura
+Zenno
+Jorden
+Haru
+Urara
+Pegasus
+Imposter
+Meisho
+Dota
+Coco Jambo
+Aoi
+Kuroko
+Akashi
+Aomine
+Murasakibara
+Kagami
+Kise
+Midorima
+Momoi
+Seregga
+TinkyWinky
+Deepsy
+Lala
+Po
+Nisha
+Collapse
+Larl
+Marline
+Niku
+Gpk
+Dukalis
+Dendy
+Mira
+Mirage
+Dust
+Nuke
+Inferno
+Nightfall
+Fishman
+Shesot
+Arsen
+Edgar
+Rustam
+Dildobek
+Jamshut
+Ravshan
+Atom Bomb
+KFC
+McDonalds
+Dio
+Diego
