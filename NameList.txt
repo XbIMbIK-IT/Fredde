@@ -13,6 +13,7 @@ Flappy
 Jabo
 Zlojyr
 Dobrojyr
+Kirill do not touch git bash
 Ranat
 Ascold
 Konifa
