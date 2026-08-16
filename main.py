@@ -1,13 +1,13 @@
 from fredde import freddies
 from fredde import fredde
-from sex import try_sex
+from sex import try_sex,sex
 import tree
 from simulation import step
 from freddePhoto import show_fredde
 from freddePhoto import save_fredde
 
 Ded1 = fredde(
-    name='Дедушка',
+    name='Гипнокрад',
     eyelash= False,
     eye= 'blackout',
     hatAcs= 'foil',
@@ -22,7 +22,7 @@ Ded1 = fredde(
 )
 
 Babka1 = fredde(
-    name='Бабушка',
+    name='Агафья',
     eyelash= False,
     eye= 'hearts',
     hatAcs= 'wings',
@@ -37,22 +37,78 @@ Babka1 = fredde(
 )
 
 Ded2 = fredde(
-    name='Другой дедушка',
-    color=[0, 255, 0],
-    genid=-30,
-    gendom=0.3,
+    name='Касеки',
+    eyelash=False,
+    eye='ghoul',
+    hatAcs='horns2',
+    faceAcs='drop',
+    bodyPattern='xeno',
+    color=[131, 71, 201],
+    genid=20,
+    gendom=0.8,
     mutrate=0,
-    rarity='legendary',
+    rarity='common',
     age=11
 )
 
 Babka2 = fredde(
-    name='Другая бабушка',
-    color=[0, 0, 255],
-    genid=-42,
+    name='Бабка гренни',
+    eyelash=False,
+    eye='herobrine',
+    hatAcs='nimbus',
+    faceAcs='tears',
+    bodyPattern='blood',
+    color=[14, 12, 224],
+    genid=20,
     gendom=0.8,
     mutrate=0,
-    rarity='mythic',
+    rarity='common',
+    age=11
+)
+
+Ded3 = fredde(
+    name='Хрящ',
+    eyelash=False,
+    eye='ghoul',
+    hatAcs='horns2',
+    faceAcs='drop',
+    bodyPattern='xeno',
+    color=[12, 71, 44],
+    genid=20,
+    gendom=0.8,
+    mutrate=0,
+    rarity='common',
+    age=11
+)
+
+Babka3 = fredde(
+    name='Баба капа',
+    eyelash=False,
+    eye='herobrine',
+    hatAcs='nimbus',
+    faceAcs='tears',
+    bodyPattern='blood',
+    color=[131, 12, 12],
+    genid=20,
+    gendom=0.8,
+    mutrate=0,
+    rarity='common',
+    age=11
+)
+
+Gurin = fredde(
+    name='Гурин',
+    eyelash=False,
+    eye='gurin',
+    hatAcs='gurin',
+    eyeAcs='gurin',
+    faceAcs='gurin',
+    bodyPattern='afghanistan',
+    color=[255, 255, 255],
+    genid=20,
+    gendom=0.8,
+    mutrate=0,
+    rarity='common',
     age=11
 )
 
@@ -84,16 +140,19 @@ step(freddies)
 step(freddies)
 
 
-baby3, message = try_sex(baby, baby2)
+baby3, message = try_sex(Ded3, Babka3)
 print(message)
+step(freddies)
+step(freddies)
+
 baby4, message = try_sex(baby, baby2)
-print(message)
-
 step(freddies)
 step(freddies)
-
 baby5, message = try_sex(baby3, baby4)
-print(message)
+baby6, message = try_sex(baby4, Ded3)
+step(freddies)
+step(freddies)
+baby7, message = try_sex(baby3, baby5)
 # print(baby.age)
 
 #show_fredde(Babka1)
