@@ -7,27 +7,23 @@ RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
 
 
-def try_sex(parent1, parent2):
-    try:
-        if not parent1.alive or not parent2.alive:
-            return None, "Один из родителей мёртв"
+def trySex(parent1, parent2):
+    if not parent1.alive or not parent2.alive:
+        return None, "Один из родителей мёртв"
 
-        if parent1.gender == 'cf' or parent2.gender == 'cf':
-            return None, "CF не может размножаться"
+    if parent1.gender == 'cf' or parent2.gender == 'cf':
+        return None, "CF не может размножаться"
 
-        if parent1.gender == 'is' or parent2.gender == 'is':
-            pass
-        elif parent1.gender == parent2.gender:
-            return None, "Одинаковый пол"
+    if parent1.gender == 'is' or parent2.gender == 'is':
+        pass
+    elif parent1.gender == parent2.gender:
+        return None, "Одинаковый пол"
 
-        if parent1.age < SEX_AGE or parent2.age < SEX_AGE:
-            return None, "Один из родителей слишком молод"
+    if parent1.age < SEX_AGE or parent2.age < SEX_AGE:
+        return None, "Один из родителей слишком молод"
 
-        return sex(parent1, parent2), "Успешно"
+    return sex(parent1, parent2), "Успешно"
 
-    except Exception as e:
-        return None, f"Ошибка при размножении: {e}"
-        
 
 def is_inbreeding(parent1, parent2):
     family1 = parent1.family
