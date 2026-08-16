@@ -13,12 +13,12 @@ Ded1 = fredde(
     hatAcs= 'foil',
     faceAcs= 'tube',
     bodyPattern= 'afghanistan',
-    color=[180, 200, 30],
+    color=[255, 255, 0],
     genid=10,
     gendom=0.3,
     mutrate=0,
     rarity='rare',
-    age=10
+    age=11
 )
 
 Babka1 = fredde(
@@ -28,56 +28,72 @@ Babka1 = fredde(
     hatAcs= 'wings',
     faceAcs= 'tail',
     bodyPattern= 'hearts',
-    color=[150, 10, 10],
+    color=[255, 0, 0],
     genid=20,
     gendom=0.8,
-    mutrate=100,
+    mutrate=0,
     rarity='common',
-    age=10
+    age=11
 )
 
 Ded2 = fredde(
     name='Другой дедушка',
-    color=[55, 0, 0],
+    color=[0, 255, 0],
     genid=-30,
     gendom=0.3,
-    mutrate=110,
+    mutrate=0,
     rarity='legendary',
-    age=10
+    age=11
 )
 
 Babka2 = fredde(
     name='Другая бабушка',
-    color=[255, 0, 70],
+    color=[0, 0, 255],
     genid=-42,
     gendom=0.8,
     mutrate=0,
     rarity='mythic',
-    age=10
+    age=11
 )
 
-baby, message = trySex(Ded1, Babka1)
 
+baby, message = trySex(Ded1, Babka1)
+print(message)
+baby2, message = trySex(Ded2, Babka2)
 print(message)
 
-if baby:
-    values = [
-        ("name", baby.name),
-        ("gender", baby.gender),
-        ("eyelashes", baby.eyelash),
-        ("age", baby.age),
-        ("generation", baby.generation),
-        ("genid", baby.genid),
-        ("gendom", baby.gendom),
-        ("mutrate", baby.mutrate),
-        ("color", baby.color)
-    ]
 
-    for name, value in values:
-        print(f"{name}: {value}")
+#if baby:
+#    values = [
+#        ("name", baby.name),
+#        ("gender", baby.gender),
+#        ("eyelashes", baby.eyelash),
+#        ("age", baby.age),
+#        ("generation", baby.generation),
+#        ("genid", baby.genid),
+#        ("gendom", baby.gendom),
+#        ("mutrate", baby.mutrate),
+#        ("color", baby.color)
+#    ]
+#
+#    for name, value in values:
+#        print(f"{name}: {value}")
+#
 
-# step(freddies)
-# step(freddies)
+step(freddies)
+step(freddies)
+
+
+baby3, message = trySex(baby, baby2)
+print(message)
+baby4, message = trySex(baby, baby2)
+print(message)
+
+step(freddies)
+step(freddies)
+
+baby5, message = trySex(baby3, baby4)
+print(message)
 # print(baby.age)
 
 #show_fredde(Babka1)
