@@ -9,12 +9,6 @@ from matplotlib.patches import Circle
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FuncAnimation
 
-try:
-    from scipy.spatial import cKDTree
-    _HAS_SCIPY = True
-except ImportError:
-    _HAS_SCIPY = False
-
 from fredde import freddies
 
 from freddePhoto import generate_fredde
@@ -48,6 +42,7 @@ DEFAULT_PARAMS = {
     "repulsion":   1,
     "spring_len":  1.5,
     "spring_k":    0.03,
+    "gen_pull":    0.015,
     "center_pull": 0.02,
     "damping":     0.86,
     "jitter":      0.010,
@@ -58,6 +53,7 @@ SLIDERS = [
     ("repulsion",     "Отталкивание узлов",     0.1,   3.0),
     ("spring_len",    "Длина связи",            0.5,   4.0),
     ("spring_k",      "Жёсткость связи",        0.0,   0.12),
+    ("gen_pull",      "Тяга к поколению",       0.0,   0.15),
     ("center_pull",   "Тяга к центру",          0.0,   0.02),
     ("damping",       "Затухание",              0.5,   0.98),
     ("jitter",        "Дрожание",               0.0,   0.05),
@@ -67,6 +63,11 @@ SLIDERS = [
 GEN_HEIGHT = 2.6
 
 FRAME_INTERVAL_MS = 16   # ~60 fps, пока симуляция "бодрствует"
+
+# Порог смещения узла (в координатах данных), ниже которого мы НЕ
+# пересчитываем его спрайт/текст в этом кадре. Экономит основную массу
+# вызовов set_extent/set_position, которые и были главным тормозом.
+DIRTY_EPS = 0.0022
 
 REVEAL_FRAMES_PER_NODE = 3
 REVEAL_FRAMES_PER_EDGE = 1
@@ -88,14 +89,6 @@ ZOOM_IN_FACTOR  = 0.9
 ZOOM_OUT_FACTOR = 1.0 / 0.9
 MIN_VIEW_SPAN   = 1.5    # ближе не подпустим, а то совсем ничего не видно
 MAX_VIEW_ZOOM_OUT = 4.0  # во сколько раз можно отдалиться от начального вида
-
-# ---------- отталкивание узлов ----------
-# За этим расстоянием сила отталкивания пренебрежимо мала (репульсия падает
-# как 1/r^2), поэтому дальние пары узлов в расчёте вообще не участвуют.
-# Именно это и даёт основной прирост скорости: раньше на каждый кадр считалась
-# полная матрица n x n для ВСЕХ пар узлов, даже тех, что были на разных концах
-# экрана и почти не влияли друг на друга.
-REPULSION_CUTOFF = 10.0
 
 GENDER_LABELS = {
     "boy": "мальчик",
@@ -137,11 +130,20 @@ def show():
     def gen_y(gen):
         return -gen * GEN_HEIGHT
 
+    gen_target_y = np.array([gen_y(node.generation) for node in nodes], dtype=float)
+
     # ---------- Начальные позиции (numpy) ----------
     pos = np.zeros((n, 2))
     prev_pos = np.zeros((n, 2))
     vel = np.zeros((n, 2))
     dragged_mask = np.zeros(n, dtype=bool)
+
+    # Последняя позиция, на которую реально были выставлены спрайт/текст.
+    # Пока узел не отошёл от неё дальше DIRTY_EPS - не трогаем его артисты.
+    last_drawn_pos = np.zeros((n, 2))
+    # Узлы, которые нужно принудительно обновить в этом кадре независимо
+    # от смещения (появление при reveal, начало/конец перетаскивания).
+    force_dirty = set()
 
     def layout_by_generation(spring_len, spread_x, spread_y):
         for gen, gnodes in generations.items():
@@ -154,6 +156,7 @@ def show():
 
     layout_by_generation(DEFAULT_PARAMS["spring_len"], 0.4, 0.3)
     prev_pos[:] = pos
+    last_drawn_pos[:] = pos
 
     max_width = max((len(v) for v in generations.values()), default=1)
     x_limit = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) + 3.0
@@ -170,13 +173,19 @@ def show():
         fig.canvas.manager.set_window_title("Генеалогическое древо")
     except Exception:
         pass
-    plt.subplots_adjust(bottom=0.1, left=0.03, right=0.97, top=0.94)
 
-    ax.set_title("Генеалогическое древо", color=TEXT_COLOR, fontsize=14, pad=14)
+    # Убираем визуальные отступы сверху/снизу - граф теперь занимает
+    # всю высоту окна. Заголовок больше не "откусывает" место у осей,
+    # а рисуется полупрозрачным текстом поверх сцены.
+    plt.subplots_adjust(bottom=0.0, left=0.02, right=0.98, top=1.0)
+
     ax.set_xlim(*home_xlim)
     ax.set_ylim(*home_ylim)
     ax.set_aspect("equal", adjustable="box")
     ax.set_axis_off()
+
+    fig.text(0.5, 0.965, "Генеалогическое древо", color=TEXT_COLOR, fontsize=14,
+              ha="center", va="top", zorder=15)
 
     dragged_idx = {"i": None}
 
@@ -262,6 +271,19 @@ def show():
     tooltip.set_visible(False)
     hover_state = {"i": None}
 
+    # Помечаем всё, что двигается по кадрам, как "animated" - это
+    # стандартная подсказка matplotlib для блиттинга: такие артисты
+    # исключаются из статичного фонового снимка и рисуются отдельным
+    # быстрым слоем поверх него.
+    for artist in halo_circles + name_texts + gen_texts + [edge_collection, arrow_collection, tooltip]:
+        artist.set_animated(True)
+    for im in images:
+        if im is not None:
+            im.set_animated(True)
+    for dot in fallback_dots:
+        if dot is not None:
+            dot.set_animated(True)
+
     # ---------------------------------------------------------
     #  ПОЭТАПНОЕ ПОЯВЛЕНИЕ (узлы, потом связи)
     # ---------------------------------------------------------
@@ -295,6 +317,9 @@ def show():
         random.shuffle(eorder)
         reveal.update(active=True, frame=0, node_order=order, node_i=0, edge_order=eorder, edge_i=0)
         hide_everything()
+        # Массовое скрытие/показ артистов - это не просто движение,
+        # без полного redraw блиттинг оставит на экране старую картинку.
+        fig.canvas.draw()
 
     def reveal_node(i):
         halo_circles[i].set_visible(True)
@@ -304,6 +329,9 @@ def show():
             images[i].set_visible(True)
         if fallback_dots[i] is not None:
             fallback_dots[i].set_visible(True)
+        # Только что показанный узел обязан обновить свою геометрию
+        # в этом же кадре, иначе он мигнёт в позиции (0,0,0,0).
+        force_dirty.add(i)
 
     def advance_reveal():
         nonlocal revealed_edge_parent, revealed_edge_child
@@ -335,45 +363,19 @@ def show():
 
     # ---------------------------------------------------------
     #  ФИЗИКА (векторизовано на numpy)
-    #
-    #  Раньше отталкивание считалось как полная матрица n x n на каждый
-    #  кадр (diff = pos[:, None, :] - pos[None, :, :]) - то есть КАЖДЫЙ
-    #  узел отталкивался от КАЖДОГО, даже от тех, что за пределами экрана.
-    #  При росте числа фредиков это растёт квадратично и именно это душило
-    #  анимацию. Теперь через KD-дерево (scipy) находим только пары узлов
-    #  ближе REPULSION_CUTOFF друг к другу - дальние пары дают исчезающе
-    #  малую силу и на глаз результат не отличается, а считается на порядок
-    #  быстрее. Если scipy не установлен - используется старый честный
-    #  способ как запасной вариант.
     # ---------------------------------------------------------
     def compute_forces():
-        forces = np.zeros((n, 2))
+        diff = pos[:, None, :] - pos[None, :, :]
+        dist_sq = np.sum(diff * diff, axis=-1)
+        np.fill_diagonal(dist_sq, np.inf)
+        dist = np.sqrt(dist_sq)
+        dist_safe = np.where(dist < 1e-3, 1e-3, dist)
 
-        if _HAS_SCIPY and n > 1:
-            tree = cKDTree(pos)
-            pairs = tree.query_pairs(r=REPULSION_CUTOFF, output_type="ndarray")
-            if len(pairs):
-                i_idx, j_idx = pairs[:, 0], pairs[:, 1]
-                diff = pos[i_idx] - pos[j_idx]
-                dist_sq = np.einsum("ij,ij->i", diff, diff)
-                dist_sq = np.where(dist_sq < 1e-6, 1e-6, dist_sq)
-                dist = np.sqrt(dist_sq)
-                repel = params["repulsion"] / dist_sq
-                fx = diff[:, 0] / dist * repel
-                fy = diff[:, 1] / dist * repel
-                np.add.at(forces[:, 0], i_idx, fx)
-                np.add.at(forces[:, 1], i_idx, fy)
-                np.add.at(forces[:, 0], j_idx, -fx)
-                np.add.at(forces[:, 1], j_idx, -fy)
-        else:
-            diff = pos[:, None, :] - pos[None, :, :]
-            dist_sq = np.sum(diff * diff, axis=-1)
-            np.fill_diagonal(dist_sq, np.inf)
-            dist = np.sqrt(dist_sq)
-            dist_safe = np.where(dist < 1e-3, 1e-3, dist)
-            repel = params["repulsion"] / np.where(dist_sq < 1e-6, 1e-6, dist_sq)
-            forces[:, 0] = np.sum(diff[..., 0] / dist_safe * repel, axis=1)
-            forces[:, 1] = np.sum(diff[..., 1] / dist_safe * repel, axis=1)
+        repel = params["repulsion"] / np.where(dist_sq < 1e-6, 1e-6, dist_sq)
+        forces = np.stack([
+            np.sum(diff[..., 0] / dist_safe * repel, axis=1),
+            np.sum(diff[..., 1] / dist_safe * repel, axis=1),
+        ], axis=-1)
 
         if len(edges):
             pdiff = pos[child_idx] - pos[parent_idx]
@@ -388,11 +390,7 @@ def show():
             np.add.at(forces[:, 0], child_idx, -efx)
             np.add.at(forces[:, 1], child_idx, -efy)
 
-        # Тяги к поколению больше нет - раньше она держала каждый узел
-        # "привязанным" к своей горизонтальной линии, из-за чего верхнее и
-        # нижнее поколения не могли свободно разойтись и вели себя как будто
-        # упирались в невидимую стену с пружиной. Теперь по вертикали узлы
-        # свободны и расходятся только под действием отталкивания и связей.
+        forces[:, 1] += (gen_target_y - pos[:, 1]) * params["gen_pull"]
         forces[:, 0] += -pos[:, 0] * params["center_pull"]
         if params["jitter"] > 0:
             forces += np.random.uniform(-params["jitter"], params["jitter"], size=(n, 2))
@@ -407,32 +405,68 @@ def show():
 
     # ---------------------------------------------------------
     #  ОБНОВЛЕНИЕ ПОЗИЦИЙ У УЖЕ СУЩЕСТВУЮЩИХ ARTIST'ОВ
+    #
+    #  Геометрия (extent/position) пересчитывается ТОЛЬКО у узлов,
+    #  которые реально сдвинулись дальше DIRTY_EPS с прошлого раза,
+    #  когда мы их перерисовывали - именно эти вызовы (set_extent,
+    #  set_position) были главным источником тормозов, а не сама физика.
+    #  Список видимых артистов всё равно возвращается целиком - это
+    #  требование блиттинга matplotlib (он каждый кадр перерисовывает
+    #  ровно то, что мы ему вернули, поверх статичного фона).
     # ---------------------------------------------------------
     def update_artists():
+        diffs = pos - last_drawn_pos
+        move = np.hypot(diffs[:, 0], diffs[:, 1])
+        dirty = (move > DIRTY_EPS) | dragged_mask
+        if force_dirty:
+            idxs = list(force_dirty)
+            dirty[idxs] = True
+            force_dirty.clear()
+
+        changed = [edge_collection, arrow_collection]
+
         for i in range(n):
-            x, y = pos[i]
-            if halo_circles[i].get_visible():
+            if not halo_circles[i].get_visible():
+                continue
+
+            if dirty[i]:
+                x, y = pos[i]
                 halo_circles[i].center = (x, y)
-            im = images[i]
-            if im is not None and im.get_visible():
-                hw, hh = half_sizes[i]
-                im.set_extent((x - hw, x + hw, y - hh, y + hh))
-            dot = fallback_dots[i]
-            if dot is not None and dot.get_visible():
-                dot.center = (x, y)
-                dot.set_edgecolor(ACCENT_COLOR if dragged_idx["i"] == i else "#ffffff")
-                dot.set_linewidth(2.4 if dragged_idx["i"] == i else 1.1)
-            if name_texts[i].get_visible():
+
+                im = images[i]
+                if im is not None:
+                    hw, hh = half_sizes[i]
+                    im.set_extent((x - hw, x + hw, y - hh, y + hh))
+
+                dot = fallback_dots[i]
+                if dot is not None:
+                    dot.center = (x, y)
+
                 name_texts[i].set_position((x, y + NODE_IMG_HALF + 0.14))
-            if gen_texts[i].get_visible():
                 gen_texts[i].set_position((x, y - NODE_IMG_HALF - 0.14))
-            if dragged_idx["i"] == i and halo_circles[i].get_visible():
-                halo_circles[i].set_edgecolor(ACCENT_COLOR)
-                halo_circles[i].set_linewidth(2.0)
-            elif halo_circles[i].get_visible():
-                halo_circles[i].set_linewidth(0)
+
+                is_drag = dragged_idx["i"] == i
+                if dot is not None:
+                    dot.set_edgecolor(ACCENT_COLOR if is_drag else "#ffffff")
+                    dot.set_linewidth(2.4 if is_drag else 1.1)
+                halo_circles[i].set_edgecolor(ACCENT_COLOR if is_drag else "none")
+                halo_circles[i].set_linewidth(2.0 if is_drag else 0)
+
+                last_drawn_pos[i] = pos[i]
+
+            changed.append(halo_circles[i])
+            if images[i] is not None:
+                changed.append(images[i])
+            if fallback_dots[i] is not None:
+                changed.append(fallback_dots[i])
+            changed.append(name_texts[i])
+            changed.append(gen_texts[i])
 
         _update_edges_and_arrows()
+        if tooltip.get_visible():
+            changed.append(tooltip)
+
+        return changed
 
     def _update_edges_and_arrows():
         if len(revealed_edge_parent) == 0:
@@ -501,7 +535,7 @@ def show():
             x, y = pos[i]
             tooltip.xy = (x, y)
             tooltip.set_visible(True)
-        fig.canvas.draw_idle()
+        fig.canvas.draw()
 
     # ---------------------------------------------------------
     #  СОН / ПРОБУЖДЕНИЕ АНИМАЦИИ
@@ -530,6 +564,7 @@ def show():
         if i is not None:
             dragged_mask[i] = True
             vel[i] = 0.0
+            force_dirty.add(i)
             wake()
         else:
             # клик по пустому месту - тащим саму сцену (панорама)
@@ -557,7 +592,7 @@ def show():
             dy_data = -dy_px / bbox.height * (ylim0[1] - ylim0[0])
             ax.set_xlim(xlim0[0] + dx_data, xlim0[1] + dx_data)
             ax.set_ylim(ylim0[0] + dy_data, ylim0[1] + dy_data)
-            fig.canvas.draw_idle()
+            fig.canvas.draw()
             return
 
         if event.inaxes != ax:
@@ -569,8 +604,10 @@ def show():
         i = dragged_idx["i"]
         if i is not None:
             dragged_mask[i] = False
+            force_dirty.add(i)
         dragged_idx["i"] = None
         pan_state["active"] = False
+        wake()
 
     def on_scroll(event):
         if event.inaxes != ax or event.xdata is None or event.ydata is None:
@@ -596,7 +633,7 @@ def show():
         ax.set_xlim(xdata - span_x * relx, xdata + span_x * (1 - relx))
         ax.set_ylim(ydata - span_y * rely, ydata + span_y * (1 - rely))
         wake()
-        fig.canvas.draw_idle()
+        fig.canvas.draw()
 
     fig.canvas.mpl_connect("button_press_event", on_press)
     fig.canvas.mpl_connect("motion_notify_event", on_motion)
@@ -609,6 +646,7 @@ def show():
     def regenerate(event):
         layout_by_generation(params["spring_len"], 0.5, 0.4)
         prev_pos[:] = pos
+        last_drawn_pos[:] = pos
         vel[:] = np.random.uniform(-0.6, 0.6, size=(n, 2))
         ax.set_xlim(*home_xlim)
         ax.set_ylim(*home_ylim)
@@ -720,7 +758,7 @@ def show():
         ax.set_xlim(*home_xlim)
         ax.set_ylim(*home_ylim)
         wake()
-        fig.canvas.draw_idle()
+        fig.canvas.draw()
 
     home_button_ax = fig.add_axes([0.015, 0.015, 0.09, 0.05])
     home_button = Button(home_button_ax, "⌂ Вид", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
@@ -735,7 +773,7 @@ def show():
         prev_pos[:] = pos
         step_physics()
         advance_reveal()
-        update_artists()
+        changed = update_artists()
 
         panel_moving = panel_state["x"] != panel_state["target_x"]
         if panel_moving:
@@ -743,6 +781,12 @@ def show():
             if abs(panel_state["target_x"] - panel_state["x"]) < 0.0015:
                 panel_state["x"] = panel_state["target_x"]
             sync_panel_positions()
+            # Панель настроек - это отдельные Axes; блиттинг работает
+            # только с "нашим" слоем артистов и не заметит, что эти оси
+            # переместились. Пока панель едет, делаем честный полный
+            # redraw - это considerably дороже, но длится лишь пару
+            # десятков кадров анимации выезда, а не постоянно.
+            fig.canvas.draw()
 
         max_move = np.max(np.hypot(*(pos - prev_pos).T)) if n else 0.0
         busy = reveal["active"] or panel_moving or dragged_idx["i"] is not None or pan_state["active"]
@@ -754,11 +798,15 @@ def show():
         else:
             sleep_state["quiet_frames"] = 0
 
-        return []
+        return changed
+
+    def init_anim():
+        return update_artists()
 
     reveal_all_immediately()
     update_artists()
-    anim = FuncAnimation(fig, animate, interval=FRAME_INTERVAL_MS, cache_frame_data=False)
+    anim = FuncAnimation(fig, animate, init_func=init_anim, interval=FRAME_INTERVAL_MS,
+                          cache_frame_data=False, blit=True)
     anim_ref["anim"] = anim
     fig._tree_animation_ref = anim
 
