@@ -1,13 +1,18 @@
 from fredde import freddies
-from fredde import Fredde
-from sex import try_sex
+from fredde import fredde
+from sex import trySex
 import tree
 from simulation import step
 from freddePhoto import show_fredde
 from freddePhoto import save_fredde
 
-Ded1 = Fredde(
+Ded1 = fredde(
     name='Дедушка',
+    eyelash= False,
+    eye= 'blackout',
+    hatAcs= 'foil',
+    faceAcs= 'tube',
+    bodyPattern= 'afghanistan',
     color=[180, 200, 30],
     genid=10,
     gendom=0.3,
@@ -16,27 +21,32 @@ Ded1 = Fredde(
     age=10
 )
 
-Babka1 = Fredde(
+Babka1 = fredde(
     name='Бабушка',
-    color=[40, 0, 135],
+    eyelash= False,
+    eye= 'hearts',
+    hatAcs= 'wings',
+    faceAcs= 'tail',
+    bodyPattern= 'hearts',
+    color=[150, 10, 10],
     genid=20,
     gendom=0.8,
-    mutrate=0,
+    mutrate=100,
     rarity='common',
     age=10
 )
 
-Ded2 = Fredde(
+Ded2 = fredde(
     name='Другой дедушка',
     color=[55, 0, 0],
     genid=-30,
     gendom=0.3,
-    mutrate=0,
+    mutrate=110,
     rarity='legendary',
     age=10
 )
 
-Babka2 = Fredde(
+Babka2 = fredde(
     name='Другая бабушка',
     color=[255, 0, 70],
     genid=-42,
@@ -46,7 +56,7 @@ Babka2 = Fredde(
     age=10
 )
 
-baby, message = try_sex(Ded1, Babka1)
+baby, message = trySex(Ded1, Babka1)
 
 print(message)
 
@@ -70,6 +80,6 @@ if baby:
 # step(freddies)
 # print(baby.age)
 
-show_fredde(baby)
+#show_fredde(Babka1)
 
-# tree.show()
+tree.show()
