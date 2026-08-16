@@ -23,7 +23,7 @@ PANEL_HOVER    = "#3b3d42"
 EDGE_COLOR     = "#5a5d63"   # цвет связей родитель -> ребёнок
 ARROW_COLOR    = "#9aa0a8"   # цвет наконечника стрелки (ярче линии)
 TEXT_COLOR     = "#dcddde"   # цвет имени узла
-GEN_TEXT_COLOR = "#75787f"   # цвет подписи поколения под узлом
+GEN_TEXT_COLOR = "#dcddde"   # цвет подписи поколения под узлом
 ACCENT_COLOR   = "#7289da"   # обводка узла при перетаскивании / акцент слайдеров
 
 # Размер картинки фредика теперь задаётся в координатах данных (а не в
@@ -525,7 +525,8 @@ def show():
             f"Возраст: {node.age}\n"
             f"Пол: {gender}\n"
             f"Редкость: {node.rarity}\n"
-            f"GenID/GenDom: {node.genid}/{node.gendom}\n"
+            f"Отпечаток: {node.genid}\n"
+            f"Доминантность: {node.gendom}\n"
             f"Мутация: {node.mutrate}%"
         )
 
