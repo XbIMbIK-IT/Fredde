@@ -70,6 +70,6 @@ if baby:
 # step(freddies)
 # print(baby.age)
 
-show_fredde(baby)
+# show_fredde(baby)
 
-# tree.show()
+tree.show()

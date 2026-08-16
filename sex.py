@@ -32,69 +32,73 @@ def is_inbreeding(parent1, parent2):
 
 
 def sex(parent1, parent2):
-
-    if parent1.generation <= parent2.generation:
-        babygeneration = parent2.generation + 1
-    else:
-        babygeneration = parent1.generation + 1
-
     # Общая доминантность
     total_dom = parent1.gendom + parent2.gendom
+
 
     # Шанс мутации
     MutRate = mut_chance(parent1, parent2, total_dom)
 
+    is_mutant = random.uniform(0, 100) <= MutRate
+
+    if parent1.generation <= parent2.generation:
+        generation = parent2.generation + 1
+    else:
+        generation = parent1.generation + 1
+
+
     # GenID
-    babygenid = (
+    genid = (
         parent1.genid * parent1.gendom +
         parent2.genid * parent2.gendom
     ) / total_dom
-    
+
+    genid *= random.uniform(0.6, 1.4)
+    genid = round(genid)
+
+
     # Цвет
-    babycolor = []
+    color = []
 
     for i in range(3):
-        color = (
+        value = (
             parent1.color[i] * parent1.gendom +
             parent2.color[i] * parent2.gendom
         ) / total_dom
 
-        babycolor.append(round(color))
+        if is_mutant:
+            value *= random.uniform(0.5, 2)
+            value = max(
+                0,
+                min(255, round(value[i]))
+            )
 
-    # Наследование gendom
+        color.append(round(value))
+
+
+    # Доминантность
     parent1_chance = parent1.gendom / total_dom
 
     if random.random() <= parent1_chance:
-        babygendom = parent1.gendom
+        gendom = parent1.gendom
     else:
-        babygendom = parent2.gendom
+        gendom = parent2.gendom
+
+    if is_mutant:
+        gendom *= random.uniform(0.6, 1.3)
+        gendom = max(0, min(1, gendom))
+
+    gendom = round(gendom, 3)
+
 
     # Редкость
     if random.random() <= parent1_chance:
-        babyrarity = parent1.rarity
+        rarity = parent1.rarity
     else:
-        babyrarity = parent2.rarity
+        rarity = parent2.rarity
 
-    # Мутация
-    if random.uniform(0, 100) <= MutRate:
-
-        # GenID
-        babygenid *= random.uniform(0.6, 1.4)
-
-        # Цвет
-        for i in range(3):
-            babycolor[i] *= random.uniform(0.5, 2)
-            babycolor[i] = max(
-                0,
-                min(255, round(babycolor[i]))
-            )
-
-        # Доминантность
-        babygendom *= random.uniform(0.6, 1.3)
-        babygendom = max(0, min(1, babygendom))
-
-        # Редкость
-        rarity_index = RarityList.index(babyrarity)
+    if is_mutant:
+        rarity_index = RarityList.index(rarity)
 
         if random.random() < 0.25:
             rarity_index += 1
@@ -108,39 +112,39 @@ def sex(parent1, parent2):
 
         babyrarity = RarityList[rarity_index]
 
+
     # Пол ребенка
     gender_roll = random.uniform(0, 100)
     if gender_roll < 45:
-        babygender = 'boy'
+        gender = 'boy'
     elif gender_roll < 90:
-        babygender = 'girl'
+        gender = 'girl'
     elif gender_roll < 95:
-        babygender = 'cf'
+        gender = 'cf'
     else:
-        babygender = 'is'
+        gender = 'is'
+
 
     # Реснички
-    if babygender == 'boy':
+    if gender == 'boy':
         eyelash = False
-    elif babygender == 'girl':
+    elif gender == 'girl':
         eyelash = True
     elif random.random() <= 0.5:
         eyelash = False
     else:
         eyelash = True
     
-    babygenid = round(babygenid)
-    babygendom = round(babygendom, 3)
-    MutRate = round(MutRate,1)
+
     return Fredde(
-        color=babycolor,
-        genid=babygenid,
-        gendom=babygendom,
+        color=color,
+        genid=genid,
+        gendom=gendom,
         mutrate=MutRate,
-        rarity=babyrarity,
+        rarity=rarity,
         parents=[parent1, parent2],
-        generation=babygeneration,
-        gender=babygender,
+        generation=generation,
+        gender=gender,
         eyelash=eyelash
     )
 
@@ -163,5 +167,7 @@ def mut_chance(parent1, parent2, total_dom):
     if parent1.generation != parent2.generation:
         gendif = abs(parent2.generation - parent1.generation)
         MutRate += (gendif * 2)
+
+    MutRate = round(MutRate,1)
 
     return MutRate
