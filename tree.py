@@ -9,6 +9,12 @@ from matplotlib.patches import Circle
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FuncAnimation
 
+try:
+    from scipy.spatial import cKDTree
+    _HAS_SCIPY = True
+except ImportError:
+    _HAS_SCIPY = False
+
 from fredde import freddies
 
 from freddePhoto import generate_fredde
@@ -42,7 +48,6 @@ DEFAULT_PARAMS = {
     "repulsion":   1,
     "spring_len":  1.5,
     "spring_k":    0.03,
-    "gen_pull":    0.015,
     "center_pull": 0.02,
     "damping":     0.86,
     "jitter":      0.010,
@@ -53,7 +58,6 @@ SLIDERS = [
     ("repulsion",     "Отталкивание узлов",     0.1,   3.0),
     ("spring_len",    "Длина связи",            0.5,   4.0),
     ("spring_k",      "Жёсткость связи",        0.0,   0.12),
-    ("gen_pull",      "Тяга к поколению",       0.0,   0.15),
     ("center_pull",   "Тяга к центру",          0.0,   0.02),
     ("damping",       "Затухание",              0.5,   0.98),
     ("jitter",        "Дрожание",               0.0,   0.05),
@@ -84,6 +88,14 @@ ZOOM_IN_FACTOR  = 0.9
 ZOOM_OUT_FACTOR = 1.0 / 0.9
 MIN_VIEW_SPAN   = 1.5    # ближе не подпустим, а то совсем ничего не видно
 MAX_VIEW_ZOOM_OUT = 4.0  # во сколько раз можно отдалиться от начального вида
+
+# ---------- отталкивание узлов ----------
+# За этим расстоянием сила отталкивания пренебрежимо мала (репульсия падает
+# как 1/r^2), поэтому дальние пары узлов в расчёте вообще не участвуют.
+# Именно это и даёт основной прирост скорости: раньше на каждый кадр считалась
+# полная матрица n x n для ВСЕХ пар узлов, даже тех, что были на разных концах
+# экрана и почти не влияли друг на друга.
+REPULSION_CUTOFF = 10.0
 
 GENDER_LABELS = {
     "boy": "мальчик",
@@ -124,8 +136,6 @@ def show():
 
     def gen_y(gen):
         return -gen * GEN_HEIGHT
-
-    gen_target_y = np.array([gen_y(node.generation) for node in nodes], dtype=float)
 
     # ---------- Начальные позиции (numpy) ----------
     pos = np.zeros((n, 2))
@@ -325,19 +335,45 @@ def show():
 
     # ---------------------------------------------------------
     #  ФИЗИКА (векторизовано на numpy)
+    #
+    #  Раньше отталкивание считалось как полная матрица n x n на каждый
+    #  кадр (diff = pos[:, None, :] - pos[None, :, :]) - то есть КАЖДЫЙ
+    #  узел отталкивался от КАЖДОГО, даже от тех, что за пределами экрана.
+    #  При росте числа фредиков это растёт квадратично и именно это душило
+    #  анимацию. Теперь через KD-дерево (scipy) находим только пары узлов
+    #  ближе REPULSION_CUTOFF друг к другу - дальние пары дают исчезающе
+    #  малую силу и на глаз результат не отличается, а считается на порядок
+    #  быстрее. Если scipy не установлен - используется старый честный
+    #  способ как запасной вариант.
     # ---------------------------------------------------------
     def compute_forces():
-        diff = pos[:, None, :] - pos[None, :, :]
-        dist_sq = np.sum(diff * diff, axis=-1)
-        np.fill_diagonal(dist_sq, np.inf)
-        dist = np.sqrt(dist_sq)
-        dist_safe = np.where(dist < 1e-3, 1e-3, dist)
+        forces = np.zeros((n, 2))
 
-        repel = params["repulsion"] / np.where(dist_sq < 1e-6, 1e-6, dist_sq)
-        forces = np.stack([
-            np.sum(diff[..., 0] / dist_safe * repel, axis=1),
-            np.sum(diff[..., 1] / dist_safe * repel, axis=1),
-        ], axis=-1)
+        if _HAS_SCIPY and n > 1:
+            tree = cKDTree(pos)
+            pairs = tree.query_pairs(r=REPULSION_CUTOFF, output_type="ndarray")
+            if len(pairs):
+                i_idx, j_idx = pairs[:, 0], pairs[:, 1]
+                diff = pos[i_idx] - pos[j_idx]
+                dist_sq = np.einsum("ij,ij->i", diff, diff)
+                dist_sq = np.where(dist_sq < 1e-6, 1e-6, dist_sq)
+                dist = np.sqrt(dist_sq)
+                repel = params["repulsion"] / dist_sq
+                fx = diff[:, 0] / dist * repel
+                fy = diff[:, 1] / dist * repel
+                np.add.at(forces[:, 0], i_idx, fx)
+                np.add.at(forces[:, 1], i_idx, fy)
+                np.add.at(forces[:, 0], j_idx, -fx)
+                np.add.at(forces[:, 1], j_idx, -fy)
+        else:
+            diff = pos[:, None, :] - pos[None, :, :]
+            dist_sq = np.sum(diff * diff, axis=-1)
+            np.fill_diagonal(dist_sq, np.inf)
+            dist = np.sqrt(dist_sq)
+            dist_safe = np.where(dist < 1e-3, 1e-3, dist)
+            repel = params["repulsion"] / np.where(dist_sq < 1e-6, 1e-6, dist_sq)
+            forces[:, 0] = np.sum(diff[..., 0] / dist_safe * repel, axis=1)
+            forces[:, 1] = np.sum(diff[..., 1] / dist_safe * repel, axis=1)
 
         if len(edges):
             pdiff = pos[child_idx] - pos[parent_idx]
@@ -352,7 +388,11 @@ def show():
             np.add.at(forces[:, 0], child_idx, -efx)
             np.add.at(forces[:, 1], child_idx, -efy)
 
-        forces[:, 1] += (gen_target_y - pos[:, 1]) * params["gen_pull"]
+        # Тяги к поколению больше нет - раньше она держала каждый узел
+        # "привязанным" к своей горизонтальной линии, из-за чего верхнее и
+        # нижнее поколения не могли свободно разойтись и вели себя как будто
+        # упирались в невидимую стену с пружиной. Теперь по вертикали узлы
+        # свободны и расходятся только под действием отталкивания и связей.
         forces[:, 0] += -pos[:, 0] * params["center_pull"]
         if params["jitter"] > 0:
             forces += np.random.uniform(-params["jitter"], params["jitter"], size=(n, 2))
