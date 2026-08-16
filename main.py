@@ -1,6 +1,6 @@
 from fredde import freddies
 from fredde import fredde
-from sex import trySex
+from sex import try_sex
 import tree
 from simulation import step
 from freddePhoto import show_fredde
@@ -57,9 +57,9 @@ Babka2 = fredde(
 )
 
 
-baby, message = trySex(Ded1, Babka1)
+baby, message = try_sex(Ded1, Babka1)
 print(message)
-baby2, message = trySex(Ded2, Babka2)
+baby2, message = try_sex(Ded2, Babka2)
 print(message)
 
 
@@ -84,15 +84,15 @@ step(freddies)
 step(freddies)
 
 
-baby3, message = trySex(baby, baby2)
+baby3, message = try_sex(baby, baby2)
 print(message)
-baby4, message = trySex(baby, baby2)
+baby4, message = try_sex(baby, baby2)
 print(message)
 
 step(freddies)
 step(freddies)
 
-baby5, message = trySex(baby3, baby4)
+baby5, message = try_sex(baby3, baby4)
 print(message)
 # print(baby.age)
 
