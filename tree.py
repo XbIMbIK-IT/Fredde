@@ -67,14 +67,14 @@ FRAME_INTERVAL_MS = 16   # ~60 fps, пока симуляция "бодрств�
 # Порог смещения узла (в координатах данных), ниже которого мы НЕ
 # пересчитываем его спрайт/текст в этом кадре. Экономит основную массу
 # вызовов set_extent/set_position, которые и были главным тормозом.
-DIRTY_EPS = 0.0022
+DIRTY_EPS = 0.005
 
 REVEAL_FRAMES_PER_NODE = 3
 REVEAL_FRAMES_PER_EDGE = 1
 
 # ---------- усыпление симуляции, когда всё устаканилось ----------
-SLEEP_MOVE_EPS = 0.0006
-SLEEP_FRAMES_NEEDED = 90
+SLEEP_MOVE_EPS = 0.0012
+SLEEP_FRAMES_NEEDED = 40
 
 # ---------- геометрия выезжающей панели настроек ----------
 PANEL_WIDTH       = 0.24
@@ -89,6 +89,13 @@ ZOOM_IN_FACTOR  = 0.9
 ZOOM_OUT_FACTOR = 1.0 / 0.9
 MIN_VIEW_SPAN   = 1.5    # ближе не подпустим, а то совсем ничего не видно
 MAX_VIEW_ZOOM_OUT = 4.0  # во сколько раз можно отдалиться от начального вида
+
+def _rgba(hex_color, alpha):
+    r = int(hex_color[1:3], 16) / 255
+    g = int(hex_color[3:5], 16) / 255
+    b = int(hex_color[5:7], 16) / 255
+    return (r, g, b, alpha)
+
 
 GENDER_LABELS = {
     "boy": "мальчик",
@@ -161,7 +168,9 @@ def show():
     max_width = max((len(v) for v in generations.values()), default=1)
     x_limit = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) + 3.0
     y_top = gen_y(gens_present[0]) + 2.5
-    y_bottom = gen_y(gens_present[-1]) - 2.5
+    # Снизу окна теперь плавают полупрозрачные кнопки - оставляем чуть
+    # больше запаса, чтобы нижнее поколение не оказывалось прямо под ними.
+    y_bottom = gen_y(gens_present[-1]) - 3.3
     home_xlim = (-x_limit, x_limit)
     home_ylim = (y_bottom, y_top)
 
@@ -555,6 +564,12 @@ def show():
     #  ПЕРЕТАСКИВАНИЕ УЗЛОВ + ПАНОРАМИРОВАНИЕ ПОЛЯ + ЗУМ КОЛЁСИКОМ
     # ---------------------------------------------------------
     pan_state = {"active": False, "start_px": None, "start_xlim": None, "start_ylim": None}
+    # Мышь шлёт события движения/скролла значительно чаще 60 раз в секунду.
+    # Раньше каждое такое событие вызывало немедленный fig.canvas.draw() -
+    # это и было причиной резкого проседания FPS при вращении камеры.
+    # Теперь событие только помечает сцену как "нужно перерисовать", а
+    # реальный полный redraw делает animate() не чаще одного раза за кадр.
+    view_dirty = {"flag": False}
 
     def on_press(event):
         if event.inaxes != ax or event.xdata is None or event.ydata is None:
@@ -592,7 +607,8 @@ def show():
             dy_data = -dy_px / bbox.height * (ylim0[1] - ylim0[0])
             ax.set_xlim(xlim0[0] + dx_data, xlim0[1] + dx_data)
             ax.set_ylim(ylim0[0] + dy_data, ylim0[1] + dy_data)
-            fig.canvas.draw()
+            view_dirty["flag"] = True
+            wake()
             return
 
         if event.inaxes != ax:
@@ -632,8 +648,8 @@ def show():
         rely = (ydata - cur_ylim[0]) / (cur_ylim[1] - cur_ylim[0])
         ax.set_xlim(xdata - span_x * relx, xdata + span_x * (1 - relx))
         ax.set_ylim(ydata - span_y * rely, ydata + span_y * (1 - rely))
+        view_dirty["flag"] = True
         wake()
-        fig.canvas.draw()
 
     fig.canvas.mpl_connect("button_press_event", on_press)
     fig.canvas.mpl_connect("motion_notify_event", on_motion)
@@ -653,9 +669,12 @@ def show():
         start_reveal()
         wake()
 
+    # Кнопки внизу теперь полупрозрачные - раньше это была сплошная
+    # закрашенная плашка, которая могла перекрыть фредиков, оказавшихся
+    # под ней (график теперь занимает всю высоту окна, без отступа снизу).
     button_ax = fig.add_axes([0.77, 0.015, 0.2, 0.055])
-    button_ax.set_facecolor(PANEL_COLOR)
-    regenerate_button = Button(button_ax, "⟳ Пересобрать", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
+    regenerate_button = Button(button_ax, "⟳ Пересобрать",
+                                color=_rgba(PANEL_COLOR, 0.35), hovercolor=_rgba(PANEL_HOVER, 0.8))
     regenerate_button.label.set_color(TEXT_COLOR)
     regenerate_button.label.set_fontsize(10)
     regenerate_button.on_clicked(regenerate)
@@ -757,11 +776,12 @@ def show():
     def go_home(event):
         ax.set_xlim(*home_xlim)
         ax.set_ylim(*home_ylim)
+        view_dirty["flag"] = True
         wake()
-        fig.canvas.draw()
 
     home_button_ax = fig.add_axes([0.015, 0.015, 0.09, 0.05])
-    home_button = Button(home_button_ax, "⌂ Вид", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
+    home_button = Button(home_button_ax, "⌂ Вид",
+                          color=_rgba(PANEL_COLOR, 0.35), hovercolor=_rgba(PANEL_HOVER, 0.8))
     home_button.label.set_color(TEXT_COLOR)
     home_button.label.set_fontsize(10)
     home_button.on_clicked(go_home)
@@ -781,12 +801,15 @@ def show():
             if abs(panel_state["target_x"] - panel_state["x"]) < 0.0015:
                 panel_state["x"] = panel_state["target_x"]
             sync_panel_positions()
-            # Панель настроек - это отдельные Axes; блиттинг работает
-            # только с "нашим" слоем артистов и не заметит, что эти оси
-            # переместились. Пока панель едет, делаем честный полный
-            # redraw - это considerably дороже, но длится лишь пару
-            # десятков кадров анимации выезда, а не постоянно.
+
+        # Панель настроек - это отдельные Axes, а смена xlim/ylim при
+        # панораме/зуме требует пересчёта фонового снимка блиттинга -
+        # ни то, ни другое блиттинг сам не подхватывает. Но вместо
+        # редроу на каждое событие мыши (это и тормозило) делаем его
+        # максимум один раз за кадр анимации.
+        if panel_moving or view_dirty["flag"]:
             fig.canvas.draw()
+            view_dirty["flag"] = False
 
         max_move = np.max(np.hypot(*(pos - prev_pos).T)) if n else 0.0
         busy = reveal["active"] or panel_moving or dragged_idx["i"] is not None or pan_state["active"]
