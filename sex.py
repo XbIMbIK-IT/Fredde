@@ -224,7 +224,7 @@ def mut_chance(parent1, parent2, total_dom):
     # Инбридинг
     if is_inbreeding(parent1, parent2):
         if MutRate <= 0:
-            MutRate = 13
+            MutRate = 8
         else:
             MutRate *= 1.3
     elif random.random() <= 0.4 and parent1.generation == parent2.generation:
