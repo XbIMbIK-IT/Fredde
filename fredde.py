@@ -46,7 +46,7 @@ class Fredde:
         self.eyeAcs = eyeAcs
         self.bodyPattern = bodyPattern
         self.eyelash = eyelash
-        self.max_age = MAX_AGE * (1 - freddie.mutrate / 100)
+        self.max_age = MAX_AGE * (1 - self.mutrate / 100)
 
         freddies.append(self)
         
@@ -65,9 +65,9 @@ class Fredde:
     def check_death(self):
         if self.alive and self.age > self.max_age:
             if random.random() < 0.5:
-                fredde.alive = False
+                self.alive = False
 
         if self.alive:
             return True
-            
+
         return False
