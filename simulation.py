@@ -13,7 +13,7 @@ def check_death(freddies):
 
 
 def step(freddies):
-    checkDeath(freddies)
+    check_death(freddies)
 
     for freddie in freddies:
         if freddie.alive:
