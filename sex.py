@@ -33,9 +33,6 @@ def random_visual(visuals, param):
     return random.choice(visuals[param])
 
 
-
-with open("NameList.txt", "r", encoding="utf-8") as f:
-    NameList = f.read().splitlines()
 RarityList = ['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary']
 SEX_AGE = 3
 
@@ -198,7 +195,6 @@ def sex(parent1, parent2):
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate, 1)
     return Fredde(
-        name=random.choice(NameList),
         color=babycolor,
         genid=babygenid,
         gendom=babygendom,
