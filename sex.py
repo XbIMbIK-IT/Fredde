@@ -1,4 +1,4 @@
-from fredde import fredde
+from fredde import Fredde
 import random
 import os
 
@@ -197,7 +197,7 @@ def sex(parent1, parent2):
     babygenid = round(babygenid)
     babygendom = round(babygendom, 3)
     MutRate = round(MutRate, 1)
-    return fredde(
+    return Fredde(
         name=random.choice(NameList),
         color=babycolor,
         genid=babygenid,
