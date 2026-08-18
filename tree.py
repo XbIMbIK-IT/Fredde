@@ -1,45 +1,39 @@
+import math
 import random
-from functools import partial
 
 import numpy as np
-import networkx as nx
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Button, Slider
-from matplotlib.patches import Circle
-from matplotlib.collections import LineCollection
-from matplotlib.animation import FuncAnimation
+import pygame
 
 from fredde import freddies
-
 from freddePhoto import generate_fredde
 
 
 # ============================================================
-#  ВИЗУАЛЬНЫЕ НАСТРОЙКИ (тёмная тема в стиле Obsidian)
+#  ЦВЕТА / ТЕМА (в стиле Obsidian, тёмная)
 # ============================================================
-BG_COLOR       = "#202225"   # фон окна и осей
-PANEL_COLOR    = "#2b2d31"   # фон панели настроек / кнопок
-PANEL_HOVER    = "#3b3d42"
-EDGE_COLOR     = "#5a5d63"   # цвет связей родитель -> ребёнок
-ARROW_COLOR    = "#9aa0a8"   # цвет наконечника стрелки (ярче линии)
-TEXT_COLOR     = "#dcddde"   # цвет имени узла
-GEN_TEXT_COLOR = "#dcddde"   # цвет подписи поколения под узлом
-ACCENT_COLOR   = "#7289da"   # обводка узла при перетаскивании / акцент слайдеров
+BG_COLOR       = (32, 34, 37)
+PANEL_COLOR    = (43, 45, 49)
+PANEL_HOVER    = (59, 61, 66)
+EDGE_COLOR     = (90, 93, 99)
+ARROW_COLOR    = (154, 160, 168)
+TEXT_COLOR     = (220, 221, 222)
+GEN_TEXT_COLOR = (200, 201, 202)
+ACCENT_COLOR   = (114, 137, 218)
+TOOLTIP_BG     = (43, 45, 49)
+WHITE          = (255, 255, 255)
 
-# Размер картинки фредика теперь задаётся в координатах данных (а не в
-# экранных пикселях), поэтому при зуме колёсиком картинки будут
-# уменьшаться/увеличиваться вместе со всей сценой, как и положено.
-NODE_IMG_HALF   = 0.50        # "радиус" картинки фредика в данных
-HIT_RADIUS      = NODE_IMG_HALF * 1.45   # хитбокс клика/наведения - с запасом, удобнее попадать
-EDGE_SHRINK     = NODE_IMG_HALF * 0.95   # не даём линии связи заходить под картинку
-ARROW_LEN       = 0.16
-ARROW_WIDTH_DEG = 22
+GENDER_LABELS = {
+    "boy": "мальчик",
+    "girl": "девочка",
+    "is": "интерсекс",
+    "cf": "чайлдфри",
+}
 
 # ============================================================
-#  ФИЗИКА (аналог "force graph" в Obsidian), регулируется ползунками.
+#  ФИЗИКА (те же формулы и параметры, что и в оригинале)
 # ============================================================
 DEFAULT_PARAMS = {
-    "repulsion":   1,
+    "repulsion":   1.0,
     "spring_len":  1.5,
     "spring_k":    0.03,
     "gen_pull":    0.015,
@@ -50,84 +44,234 @@ DEFAULT_PARAMS = {
 }
 
 SLIDERS = [
-    ("repulsion",     "Отталкивание узлов",     0.1,   3.0),
-    ("spring_len",    "Длина связи",            0.5,   4.0),
-    ("spring_k",      "Жёсткость связи",        0.0,   0.12),
-    ("gen_pull",      "Тяга к поколению",       0.0,   0.15),
-    ("center_pull",   "Тяга к центру",          0.0,   0.02),
-    ("damping",       "Затухание",              0.5,   0.98),
-    ("jitter",        "Дрожание",               0.0,   0.05),
-    ("dt",            "Скорость симуляции",     0.1,   1.5),
+    ("repulsion",   "Отталкивание узлов", 0.1, 3.0),
+    ("spring_len",  "Длина связи",        0.5, 4.0),
+    ("spring_k",    "Жёсткость связи",    0.0, 0.12),
+    ("gen_pull",    "Тяга к поколению",   0.0, 0.15),
+    ("center_pull", "Тяга к центру",      0.0, 0.02),
+    ("damping",     "Затухание",          0.5, 0.98),
+    ("jitter",      "Дрожание",           0.0, 0.05),
+    ("dt",          "Скорость симуляции", 0.1, 1.5),
 ]
 
-GEN_HEIGHT = 2.6
+GEN_HEIGHT         = 2.6
+NODE_RADIUS_WORLD  = 0.5
+HIT_RADIUS         = NODE_RADIUS_WORLD * 1.45
+EDGE_SHRINK        = NODE_RADIUS_WORLD * 0.95
+ARROW_LEN          = 0.16
+ARROW_WIDTH_DEG    = 22
 
-FRAME_INTERVAL_MS = 16   # ~60 fps, пока симуляция "бодрствует"
-
-# Порог смещения узла (в координатах данных), ниже которого мы НЕ
-# пересчитываем его спрайт/текст в этом кадре. Экономит основную массу
-# вызовов set_extent/set_position, которые и были главным тормозом.
-DIRTY_EPS = 0.005
+SCREEN_W, SCREEN_H = 1300, 850
+FPS = 60
 
 REVEAL_FRAMES_PER_NODE = 3
 REVEAL_FRAMES_PER_EDGE = 1
 
-# ---------- усыпление симуляции, когда всё устаканилось ----------
-SLEEP_MOVE_EPS = 0.0012
-SLEEP_FRAMES_NEEDED = 40
+ZOOM_IN_FACTOR  = 1.0 / 0.9
+ZOOM_OUT_FACTOR = 0.9
+MIN_VIEW_SPAN_WORLD = 1.5
+MAX_ZOOM_OUT_MULT   = 4.0
 
-# ---------- геометрия выезжающей панели настроек ----------
-PANEL_WIDTH       = 0.24
-PANEL_BOTTOM      = 0.08
-PANEL_HEIGHT_FRAC = 0.86
-PANEL_OPEN_X      = 0.73
-PANEL_CLOSED_X    = 1.03
-PANEL_EASE        = 0.25
-
-# ---------- зум колёсиком мыши ----------
-ZOOM_IN_FACTOR  = 0.9
-ZOOM_OUT_FACTOR = 1.0 / 0.9
-MIN_VIEW_SPAN   = 1.5    # ближе не подпустим, а то совсем ничего не видно
-MAX_VIEW_ZOOM_OUT = 4.0  # во сколько раз можно отдалиться от начального вида
-
-def _rgba(hex_color, alpha):
-    r = int(hex_color[1:3], 16) / 255
-    g = int(hex_color[3:5], 16) / 255
-    b = int(hex_color[5:7], 16) / 255
-    return (r, g, b, alpha)
+PANEL_W = 300
+PANEL_MARGIN = 12
+PANEL_EASE = 0.25
 
 
-GENDER_LABELS = {
-    "boy": "мальчик",
-    "girl": "девочка",
-    "is": "интерсекс",
-    "cf": "чайлдфри",
-}
+# ============================================================
+#  СПРАЙТЫ
+# ============================================================
+def get_font(size, bold=False):
+    for name in ("dejavusans", "arial", "segoeui", "notosans", "freesans"):
+        try:
+            f = pygame.font.SysFont(name, size, bold=bold)
+            if f is not None:
+                return f
+        except Exception:
+            continue
+    return pygame.font.Font(None, size)
 
 
-def show():
-    plt.rcParams["toolbar"] = "None"
+def to_pygame_surface(img):
+    """PIL.Image или ndarray -> pygame.Surface с альфа-каналом."""
+    if hasattr(img, "convert") and hasattr(img, "tobytes") and hasattr(img, "size"):
+        pil_img = img.convert("RGBA")
+        data = pil_img.tobytes()
+        surf = pygame.image.fromstring(data, pil_img.size, "RGBA")
+        return surf.convert_alpha()
 
-    G = nx.DiGraph()
-    for f in freddies:
-        G.add_node(f)
-    for child in freddies:
-        for parent in child.parents:
-            G.add_edge(parent, child)
+    arr = np.asarray(img)
+    if arr.ndim == 2:
+        arr = np.stack([arr, arr, arr, np.full_like(arr, 255)], axis=-1)
+    elif arr.shape[-1] == 3:
+        alpha = np.full(arr.shape[:2] + (1,), 255, dtype=arr.dtype)
+        arr = np.concatenate([arr, alpha], axis=-1)
+    arr = np.ascontiguousarray(arr.astype(np.uint8))
+    h, w = arr.shape[:2]
+    surf = pygame.image.frombuffer(arr.tobytes(), (w, h), "RGBA")
+    return surf.convert_alpha()
 
-    if not G.nodes:
+
+def make_halo_surface(color, diameter=128, alpha=38):
+    surf = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+    pygame.draw.circle(surf, (*color, alpha), (diameter // 2, diameter // 2), diameter // 2)
+    return surf
+
+
+class ScaledCache:
+    """Кеширует смасштабированную версию картинки, пересчитывая её
+    только когда целевой размер в пикселях реально изменился (т.е.
+    практически только при зуме, а не каждый кадр)."""
+
+    __slots__ = ("raw", "world_w", "world_h", "cached_px", "cached_surf")
+
+    def __init__(self, raw_surface, world_w, world_h):
+        self.raw = raw_surface
+        self.world_w = world_w
+        self.world_h = world_h
+        self.cached_px = None
+        self.cached_surf = None
+
+    def get(self, scale):
+        w_px = max(1, int(round(self.world_w * scale)))
+        h_px = max(1, int(round(self.world_h * scale)))
+        if self.cached_px != (w_px, h_px):
+            self.cached_surf = pygame.transform.smoothscale(self.raw, (w_px, h_px))
+            self.cached_px = (w_px, h_px)
+        return self.cached_surf
+
+
+# ============================================================
+#  ГРАФ
+# ============================================================
+def build_graph():
+    nodes = list(freddies)
+    node_index = {node: i for i, node in enumerate(nodes)}
+    edges = []
+    for child in nodes:
+        for parent in getattr(child, "parents", []):
+            if parent in node_index:
+                edges.append((node_index[parent], node_index[child]))
+    return nodes, node_index, edges
+
+
+def tooltip_lines(node):
+    gender = GENDER_LABELS.get(node.gender, node.gender)
+    status = "жив" if node.alive else "мёртв"
+    return [
+        node.name,
+        f"Статус: {status}",
+        f"Поколение: {node.generation}",
+        f"Возраст: {node.age}",
+        f"Пол: {gender}",
+        f"Редкость: {node.rarity}",
+        f"Отпечаток: {node.genid}",
+        f"Доминантность: {node.gendom}",
+        f"Мутация: {node.mutrate}%",
+    ]
+
+
+# ============================================================
+#  ПРОСТЫЕ UI-ВИДЖЕТЫ
+# ============================================================
+class Button:
+    def __init__(self, rect, label, font, on_click):
+        self.rect = pygame.Rect(rect)
+        self.label = label
+        self.font = font
+        self.on_click = on_click
+
+    def draw(self, surface, offset=(0, 0)):
+        r = self.rect.move(offset)
+        hovered = r.collidepoint(pygame.mouse.get_pos())
+        color = PANEL_HOVER if hovered else PANEL_COLOR
+        pygame.draw.rect(surface, color, r, border_radius=8)
+        txt = self.font.render(self.label, True, TEXT_COLOR)
+        surface.blit(txt, txt.get_rect(center=r.center))
+
+    def handle_click(self, pos, offset=(0, 0)):
+        if self.rect.move(offset).collidepoint(pos):
+            self.on_click()
+            return True
+        return False
+
+
+class SliderWidget:
+    def __init__(self, key, label, vmin, vmax, value, rect, font_label, font_value):
+        self.key = key
+        self.label = label
+        self.vmin = vmin
+        self.vmax = vmax
+        self.value = value
+        self.rect = pygame.Rect(rect)  # позиция track при полностью открытой панели
+        self.font_label = font_label
+        self.font_value = font_value
+        self.dragging = False
+
+    def _track_rect(self, offset):
+        return self.rect.move(offset)
+
+    def value_from_x(self, x, offset):
+        r = self._track_rect(offset)
+        t = (x - r.x) / max(1, r.w)
+        t = min(1.0, max(0.0, t))
+        return self.vmin + t * (self.vmax - self.vmin)
+
+    def draw(self, surface, offset):
+        r = self._track_rect(offset)
+        label_y = r.y - 20
+        lbl = self.font_label.render(self.label, True, TEXT_COLOR)
+        surface.blit(lbl, (r.x, label_y))
+
+        pygame.draw.rect(surface, PANEL_HOVER, r, border_radius=4)
+        t = (self.value - self.vmin) / (self.vmax - self.vmin) if self.vmax > self.vmin else 0
+        handle_x = r.x + t * r.w
+        pygame.draw.circle(surface, ACCENT_COLOR, (int(handle_x), r.centery), r.h // 2 + 4)
+
+        val_txt = self.font_value.render(f"{self.value:.3f}", True, TEXT_COLOR)
+        surface.blit(val_txt, (r.right + 10, r.centery - val_txt.get_height() // 2))
+
+    def try_grab(self, pos, offset):
+        r = self._track_rect(offset).inflate(0, 16)
+        if r.collidepoint(pos):
+            self.dragging = True
+            self.value = self.value_from_x(pos[0], offset)
+            return True
+        return False
+
+    def drag_to(self, pos, offset):
+        if self.dragging:
+            self.value = self.value_from_x(pos[0], offset)
+
+    def release(self):
+        self.dragging = False
+
+
+# ============================================================
+#  ОСНОВНАЯ ПРОГРАММА
+# ============================================================
+def main():
+    pygame.init()
+    pygame.display.set_caption("Генеалогическое древо")
+    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+    clock = pygame.time.Clock()
+
+    font_name = get_font(14, bold=True)
+    font_gen = get_font(11)
+    font_ui = get_font(14)
+    font_ui_small = get_font(11)
+    font_tooltip = get_font(15)
+    font_tooltip_bold = get_font(16, bold=True)
+    font_title = get_font(20, bold=True)
+    font_gear = get_font(18)
+
+    nodes, node_index, edges = build_graph()
+    n = len(nodes)
+    if n == 0:
         print("Генеалогическое дерево пустое.")
         return
 
-    params = dict(DEFAULT_PARAMS)
-
-    # ---------- Индексация узлов и связей под numpy ----------
-    nodes = list(G.nodes)
-    edges = list(G.edges)
-    n = len(nodes)
-    node_index = {node: i for i, node in enumerate(nodes)}
-    parent_idx = np.array([node_index[p] for p, _ in edges], dtype=int)
-    child_idx = np.array([node_index[c] for _, c in edges], dtype=int)
+    parent_idx = np.array([e[0] for e in edges], dtype=int)
+    child_idx = np.array([e[1] for e in edges], dtype=int)
 
     generations = {}
     for node in nodes:
@@ -139,18 +283,12 @@ def show():
 
     gen_target_y = np.array([gen_y(node.generation) for node in nodes], dtype=float)
 
-    # ---------- Начальные позиции (numpy) ----------
+    params = dict(DEFAULT_PARAMS)
+
     pos = np.zeros((n, 2))
     prev_pos = np.zeros((n, 2))
     vel = np.zeros((n, 2))
     dragged_mask = np.zeros(n, dtype=bool)
-
-    # Последняя позиция, на которую реально были выставлены спрайт/текст.
-    # Пока узел не отошёл от неё дальше DIRTY_EPS - не трогаем его артисты.
-    last_drawn_pos = np.zeros((n, 2))
-    # Узлы, которые нужно принудительно обновить в этом кадре независимо
-    # от смещения (появление при reveal, начало/конец перетаскивания).
-    force_dirty = set()
 
     def layout_by_generation(spring_len, spread_x, spread_y):
         for gen, gnodes in generations.items():
@@ -163,161 +301,52 @@ def show():
 
     layout_by_generation(DEFAULT_PARAMS["spring_len"], 0.4, 0.3)
     prev_pos[:] = pos
-    last_drawn_pos[:] = pos
 
     max_width = max((len(v) for v in generations.values()), default=1)
-    x_limit = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) + 3.0
-    y_top = gen_y(gens_present[0]) + 2.5
-    # Снизу окна теперь плавают полупрозрачные кнопки - оставляем чуть
-    # больше запаса, чтобы нижнее поколение не оказывалось прямо под ними.
-    y_bottom = gen_y(gens_present[-1]) - 3.3
-    home_xlim = (-x_limit, x_limit)
-    home_ylim = (y_bottom, y_top)
+    home_span_x = max(max_width * DEFAULT_PARAMS["spring_len"], 3.5) * 2 + 6.0
+    home_span_y = (gen_y(gens_present[0]) - gen_y(gens_present[-1])) + 2.5 + 3.3
+    home_cx = 0.0
+    home_cy = (gen_y(gens_present[0]) + gen_y(gens_present[-1])) / 2.0
+    home_scale = min(SCREEN_W / home_span_x, SCREEN_H / home_span_y)
 
-    # ---------- Фигура ----------
-    fig, ax = plt.subplots(figsize=(13, 8.5))
-    fig.patch.set_facecolor(BG_COLOR)
-    ax.set_facecolor(BG_COLOR)
-    try:
-        fig.canvas.manager.set_window_title("Генеалогическое древо")
-    except Exception:
-        pass
+    MIN_SCALE = min(SCREEN_W, SCREEN_H) / (max(home_span_x, home_span_y) * MAX_ZOOM_OUT_MULT)
+    MAX_SCALE = min(SCREEN_W, SCREEN_H) / MIN_VIEW_SPAN_WORLD
 
-    # Убираем визуальные отступы сверху/снизу - граф теперь занимает
-    # всю высоту окна. Заголовок больше не "откусывает" место у осей,
-    # а рисуется полупрозрачным текстом поверх сцены.
-    plt.subplots_adjust(bottom=0.0, left=0.02, right=0.98, top=1.0)
+    camera = {"cx": home_cx, "cy": home_cy, "scale": home_scale}
 
-    ax.set_xlim(*home_xlim)
-    ax.set_ylim(*home_ylim)
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_axis_off()
-
-    fig.text(0.5, 0.965, "Генеалогическое древо", color=TEXT_COLOR, fontsize=14,
-              ha="center", va="top", zorder=15)
-
-    dragged_idx = {"i": None}
-
-    # ---------------------------------------------------------
-    #  СПРАЙТЫ ФРЕДИКОВ (генерируются один раз, не каждый кадр!)
-    # ---------------------------------------------------------
-    def color_of(node):
-        r, g, b = node.color[:3]
-        return tuple(max(0, min(255, c)) / 255 for c in (r, g, b))
-
-    sprite_arrays = [None] * n
+    # ---------- спрайты, halo, текст (рендерятся один раз) ----------
+    sprite_cache = []
+    halo_cache = []
+    node_colors = []
     for i, node in enumerate(nodes):
+        color = tuple(max(0, min(255, int(c))) for c in node.color[:3])
+        node_colors.append(color)
         try:
-            img = generate_fredde(node)
-            sprite_arrays[i] = np.asarray(img)
+            surf = to_pygame_surface(generate_fredde(node))
         except Exception as e:
             print(f"Не удалось сгенерировать спрайт для {node.name}: {e}")
-            sprite_arrays[i] = None
+            surf = None
 
-    # ---------------------------------------------------------
-    #  ПОСТОЯННЫЕ ARTIST'Ы (создаются один раз, дальше только двигаются).
-    #  Картинки рисуются через imshow с extent в координатах данных -
-    #  тогда при зуме колёсиком они естественно масштабируются вместе
-    #  со сценой, а не остаются "приклеенными" к экрану как AnnotationBbox.
-    # ---------------------------------------------------------
-    edge_collection = LineCollection([], colors=EDGE_COLOR, linewidths=2.4, alpha=0.85, zorder=1)
-    ax.add_collection(edge_collection)
-
-    arrow_collection = LineCollection([], colors=ARROW_COLOR, linewidths=2.2, alpha=0.95, zorder=1.5,
-                                       capstyle="round", joinstyle="round")
-    ax.add_collection(arrow_collection)
-
-    halo_circles = []
-    images = []
-    fallback_dots = []
-    name_texts = []
-    gen_texts = []
-    half_sizes = []   # половина ширины/высоты картинки в данных (с учётом пропорций спрайта)
-
-    for i, node in enumerate(nodes):
-        color = color_of(node)
-
-        halo = Circle((0, 0), NODE_IMG_HALF * 1.35, color=color, alpha=0.15, zorder=2, linewidth=0)
-        halo.set_visible(False)
-        ax.add_patch(halo)
-        halo_circles.append(halo)
-
-        arr = sprite_arrays[i]
-        if arr is not None:
-            h, w = arr.shape[0], arr.shape[1]
-            ratio = w / h if h else 1.0
-            hw = NODE_IMG_HALF * (ratio if ratio >= 1 else 1.0)
-            hh = NODE_IMG_HALF * (1.0 if ratio >= 1 else 1.0 / ratio)
-            half_sizes.append((hw, hh))
-            im = ax.imshow(arr, extent=(0, 0, 0, 0), zorder=3, interpolation="bilinear", origin="upper")
-            im.set_visible(False)
-            images.append(im)
-            fallback_dots.append(None)
+        if surf is not None:
+            w, h = surf.get_size()
+            ratio = (w / h) if h else 1.0
+            hw = NODE_RADIUS_WORLD * (ratio if ratio >= 1 else 1.0)
+            hh = NODE_RADIUS_WORLD * (1.0 if ratio >= 1 else 1.0 / ratio)
+            sprite_cache.append((ScaledCache(surf, 2 * hw, 2 * hh), hw, hh))
         else:
-            half_sizes.append((NODE_IMG_HALF, NODE_IMG_HALF))
-            images.append(None)
-            dot = Circle((0, 0), NODE_IMG_HALF, facecolor=color, edgecolor="#ffffff",
-                         linewidth=1.1, zorder=3)
-            dot.set_visible(False)
-            ax.add_patch(dot)
-            fallback_dots.append(dot)
+            sprite_cache.append((None, NODE_RADIUS_WORLD, NODE_RADIUS_WORLD))
 
-        nt = ax.text(0, 0, node.name, color=TEXT_COLOR, fontsize=9, fontweight="bold",
-                     ha="center", va="bottom", zorder=4, visible=False)
-        name_texts.append(nt)
+        halo_d = NODE_RADIUS_WORLD * 1.35 * 2
+        halo_cache.append(ScaledCache(make_halo_surface(color), halo_d, halo_d))
 
-        gt = ax.text(0, 0, f"Поколение {node.generation}", color=GEN_TEXT_COLOR,
-                     fontsize=7, ha="center", va="top", zorder=4, visible=False)
-        gen_texts.append(gt)
+    name_surfs = [font_name.render(node.name, True, TEXT_COLOR) for node in nodes]
+    gen_surfs = [font_gen.render(f"Поколение {node.generation}", True, GEN_TEXT_COLOR) for node in nodes]
 
-    tooltip = ax.annotate(
-        "", xy=(0, 0), xytext=(18, 18), textcoords="offset points",
-        va="bottom", ha="left", fontsize=13, color=TEXT_COLOR, zorder=20,
-        linespacing=1.6,
-        bbox=dict(boxstyle="round,pad=0.8", facecolor=PANEL_COLOR, edgecolor=ACCENT_COLOR,
-                  alpha=0.97, linewidth=1.4),
-    )
-    tooltip.set_visible(False)
-    hover_state = {"i": None}
-
-    # Помечаем всё, что двигается по кадрам, как "animated" - это
-    # стандартная подсказка matplotlib для блиттинга: такие артисты
-    # исключаются из статичного фонового снимка и рисуются отдельным
-    # быстрым слоем поверх него.
-    for artist in halo_circles + name_texts + gen_texts + [edge_collection, arrow_collection, tooltip]:
-        artist.set_animated(True)
-    for im in images:
-        if im is not None:
-            im.set_animated(True)
-    for dot in fallback_dots:
-        if dot is not None:
-            dot.set_animated(True)
-
-    # ---------------------------------------------------------
-    #  ПОЭТАПНОЕ ПОЯВЛЕНИЕ (узлы, потом связи)
-    # ---------------------------------------------------------
-    reveal = {
-        "active": False,
-        "frame": 0,
-        "node_order": list(range(n)),
-        "node_i": 0,
-        "edge_order": list(range(len(edges))),
-        "edge_i": 0,
-    }
-    revealed_edge_parent = np.array([], dtype=int)
-    revealed_edge_child = np.array([], dtype=int)
-
-    def hide_everything():
-        for artist in halo_circles + name_texts + gen_texts:
-            artist.set_visible(False)
-        for im in images:
-            if im is not None:
-                im.set_visible(False)
-        for dot in fallback_dots:
-            if dot is not None:
-                dot.set_visible(False)
-        edge_collection.set_segments([])
-        arrow_collection.set_segments([])
+    # ---------- появление узлов/связей по очереди ----------
+    visible = np.zeros(n, dtype=bool)
+    reveal = {"active": False, "frame": 0, "node_order": [], "node_i": 0, "edge_order": [], "edge_i": 0}
+    revealed_parent = np.array([], dtype=int)
+    revealed_child = np.array([], dtype=int)
 
     def start_reveal():
         order = list(range(n))
@@ -325,54 +354,38 @@ def show():
         eorder = list(range(len(edges)))
         random.shuffle(eorder)
         reveal.update(active=True, frame=0, node_order=order, node_i=0, edge_order=eorder, edge_i=0)
-        hide_everything()
-        # Массовое скрытие/показ артистов - это не просто движение,
-        # без полного redraw блиттинг оставит на экране старую картинку.
-        fig.canvas.draw()
-
-    def reveal_node(i):
-        halo_circles[i].set_visible(True)
-        name_texts[i].set_visible(True)
-        gen_texts[i].set_visible(True)
-        if images[i] is not None:
-            images[i].set_visible(True)
-        if fallback_dots[i] is not None:
-            fallback_dots[i].set_visible(True)
-        # Только что показанный узел обязан обновить свою геометрию
-        # в этом же кадре, иначе он мигнёт в позиции (0,0,0,0).
-        force_dirty.add(i)
+        visible[:] = False
+        nonlocal revealed_parent, revealed_child
+        revealed_parent = np.array([], dtype=int)
+        revealed_child = np.array([], dtype=int)
 
     def advance_reveal():
-        nonlocal revealed_edge_parent, revealed_edge_child
+        nonlocal revealed_parent, revealed_child
         if not reveal["active"]:
             return
         reveal["frame"] += 1
-
         if reveal["node_i"] < n:
             if reveal["frame"] % REVEAL_FRAMES_PER_NODE == 0:
                 idx = reveal["node_order"][reveal["node_i"]]
-                reveal_node(idx)
+                visible[idx] = True
                 reveal["node_i"] += 1
         elif reveal["edge_i"] < len(edges):
             if reveal["frame"] % REVEAL_FRAMES_PER_EDGE == 0:
                 reveal["edge_i"] += 1
                 shown = reveal["edge_order"][:reveal["edge_i"]]
-                revealed_edge_parent = parent_idx[shown]
-                revealed_edge_child = child_idx[shown]
+                revealed_parent = parent_idx[shown]
+                revealed_child = child_idx[shown]
         else:
             reveal["active"] = False
 
     def reveal_all_immediately():
-        nonlocal revealed_edge_parent, revealed_edge_child
-        reveal.update(active=False, node_i=n, edge_i=len(edges))
-        for i in range(n):
-            reveal_node(i)
-        revealed_edge_parent = parent_idx
-        revealed_edge_child = child_idx
+        nonlocal revealed_parent, revealed_child
+        reveal["active"] = False
+        visible[:] = True
+        revealed_parent = parent_idx
+        revealed_child = child_idx
 
-    # ---------------------------------------------------------
-    #  ФИЗИКА (векторизовано на numpy)
-    # ---------------------------------------------------------
+    # ---------- физика (векторизовано, как в оригинале) ----------
     def compute_forces():
         diff = pos[:, None, :] - pos[None, :, :]
         dist_sq = np.sum(diff * diff, axis=-1)
@@ -412,428 +425,286 @@ def show():
         vel[free] = (vel[free] + forces[free] * dt) * params["damping"]
         pos[free] += vel[free] * dt
 
-    # ---------------------------------------------------------
-    #  ОБНОВЛЕНИЕ ПОЗИЦИЙ У УЖЕ СУЩЕСТВУЮЩИХ ARTIST'ОВ
-    #
-    #  Геометрия (extent/position) пересчитывается ТОЛЬКО у узлов,
-    #  которые реально сдвинулись дальше DIRTY_EPS с прошлого раза,
-    #  когда мы их перерисовывали - именно эти вызовы (set_extent,
-    #  set_position) были главным источником тормозов, а не сама физика.
-    #  Список видимых артистов всё равно возвращается целиком - это
-    #  требование блиттинга matplotlib (он каждый кадр перерисовывает
-    #  ровно то, что мы ему вернули, поверх статичного фона).
-    # ---------------------------------------------------------
-    def update_artists():
-        diffs = pos - last_drawn_pos
-        move = np.hypot(diffs[:, 0], diffs[:, 1])
-        dirty = (move > DIRTY_EPS) | dragged_mask
-        if force_dirty:
-            idxs = list(force_dirty)
-            dirty[idxs] = True
-            force_dirty.clear()
+    # ---------- камера ----------
+    def world_to_screen(x, y):
+        sx = SCREEN_W / 2 + (x - camera["cx"]) * camera["scale"]
+        sy = SCREEN_H / 2 - (y - camera["cy"]) * camera["scale"]
+        return sx, sy
 
-        changed = [edge_collection, arrow_collection]
+    def screen_to_world(sx, sy):
+        x = (sx - SCREEN_W / 2) / camera["scale"] + camera["cx"]
+        y = -(sy - SCREEN_H / 2) / camera["scale"] + camera["cy"]
+        return x, y
 
-        for i in range(n):
-            if not halo_circles[i].get_visible():
-                continue
-
-            if dirty[i]:
-                x, y = pos[i]
-                halo_circles[i].center = (x, y)
-
-                im = images[i]
-                if im is not None:
-                    hw, hh = half_sizes[i]
-                    im.set_extent((x - hw, x + hw, y - hh, y + hh))
-
-                dot = fallback_dots[i]
-                if dot is not None:
-                    dot.center = (x, y)
-
-                name_texts[i].set_position((x, y + NODE_IMG_HALF + 0.14))
-                gen_texts[i].set_position((x, y - NODE_IMG_HALF - 0.14))
-
-                is_drag = dragged_idx["i"] == i
-                if dot is not None:
-                    dot.set_edgecolor(ACCENT_COLOR if is_drag else "#ffffff")
-                    dot.set_linewidth(2.4 if is_drag else 1.1)
-                halo_circles[i].set_edgecolor(ACCENT_COLOR if is_drag else "none")
-                halo_circles[i].set_linewidth(2.0 if is_drag else 0)
-
-                last_drawn_pos[i] = pos[i]
-
-            changed.append(halo_circles[i])
-            if images[i] is not None:
-                changed.append(images[i])
-            if fallback_dots[i] is not None:
-                changed.append(fallback_dots[i])
-            changed.append(name_texts[i])
-            changed.append(gen_texts[i])
-
-        _update_edges_and_arrows()
-        if tooltip.get_visible():
-            changed.append(tooltip)
-
-        return changed
-
-    def _update_edges_and_arrows():
-        if len(revealed_edge_parent) == 0:
-            edge_collection.set_segments([])
-            arrow_collection.set_segments([])
+    def zoom_at(screen_pos, factor):
+        old_scale = camera["scale"]
+        new_scale = min(MAX_SCALE, max(MIN_SCALE, old_scale * factor))
+        if new_scale == old_scale:
             return
+        wx, wy = screen_to_world(*screen_pos)
+        camera["scale"] = new_scale
+        sx, sy = screen_pos
+        camera["cx"] = wx - (sx - SCREEN_W / 2) / new_scale
+        camera["cy"] = wy + (sy - SCREEN_H / 2) / new_scale
 
-        p = pos[revealed_edge_parent]
-        c = pos[revealed_edge_child]
+    def go_home():
+        camera["cx"], camera["cy"], camera["scale"] = home_cx, home_cy, home_scale
+
+    def find_node_at(wx, wy):
+        dx = pos[:, 0] - wx
+        dy = pos[:, 1] - wy
+        dist = np.hypot(dx, dy)
+        dist = np.where(visible, dist, np.inf)
+        i = int(np.argmin(dist))
+        return i if dist[i] < HIT_RADIUS else None
+
+    # ---------- кнопки ----------
+    def regenerate():
+        layout_by_generation(params["spring_len"], 0.5, 0.4)
+        prev_pos[:] = pos
+        vel[:] = np.random.uniform(-0.6, 0.6, size=(n, 2))
+        go_home()
+        start_reveal()
+
+    def do_reset_sliders():
+        for s in sliders:
+            s.value = DEFAULT_PARAMS[s.key]
+            params[s.key] = s.value
+
+    regen_button = Button((SCREEN_W - 190, SCREEN_H - 60, 170, 42), "⟳ Пересобрать", font_ui, regenerate)
+    home_button = Button((20, SCREEN_H - 60, 100, 42), "⌂ Вид", font_ui, go_home)
+    gear_button = Button((SCREEN_W - 54, 16, 38, 38), "⚙", font_gear, lambda: None)
+
+    # ---------- панель настроек ----------
+    panel_open_x = SCREEN_W - PANEL_W - PANEL_MARGIN
+    panel_closed_x = SCREEN_W + 20
+    panel_state = {"x": panel_closed_x, "target_x": panel_closed_x, "open": False}
+
+    sliders = []
+    row_top = 70
+    row_gap = 62
+    for i, (key, label, vmin, vmax) in enumerate(SLIDERS):
+        y = row_top + i * row_gap
+        sliders.append(SliderWidget(key, label, vmin, vmax, params[key],
+                                     (panel_open_x + 20, y, PANEL_W - 90, 12),
+                                     font_ui_small, font_ui_small))
+
+    reset_button = Button((panel_open_x + 20, row_top + len(SLIDERS) * row_gap + 10, PANEL_W - 40, 38),
+                           "Сбросить настройки", font_ui_small, do_reset_sliders)
+
+    def toggle_panel():
+        panel_state["open"] = not panel_state["open"]
+        panel_state["target_x"] = panel_open_x if panel_state["open"] else panel_closed_x
+
+    gear_button.on_click = toggle_panel
+
+    # ---------- отрисовка ----------
+    def draw_edges():
+        if len(revealed_parent) == 0:
+            return
+        p = pos[revealed_parent]
+        c = pos[revealed_child]
         vec = c - p
         dist = np.hypot(vec[:, 0], vec[:, 1])
         dist_safe = np.where(dist < 1e-6, 1e-6, dist)
         unit = vec / dist_safe[:, None]
-
         start = p + unit * EDGE_SHRINK
         end = c - unit * EDGE_SHRINK
-        segs = np.stack([start, end], axis=1)
-        edge_collection.set_segments(segs)
 
-        # наконечник-стрелка ("шеврон") прямо перед узлом-ребёнком
         angle = np.arctan2(unit[:, 1], unit[:, 0])
-        spread = np.radians(ARROW_WIDTH_DEG)
-        tip = end
-        left = tip - ARROW_LEN * np.stack([np.cos(angle - spread), np.sin(angle - spread)], axis=1)
-        right = tip - ARROW_LEN * np.stack([np.cos(angle + spread), np.sin(angle + spread)], axis=1)
+        spread = math.radians(ARROW_WIDTH_DEG)
+        left = end - ARROW_LEN * np.stack([np.cos(angle - spread), np.sin(angle - spread)], axis=1)
+        right = end - ARROW_LEN * np.stack([np.cos(angle + spread), np.sin(angle + spread)], axis=1)
 
-        arrow_segs = np.stack([left, tip, right], axis=1)
-        arrow_collection.set_segments(arrow_segs)
+        for i in range(len(revealed_parent)):
+            sx1, sy1 = world_to_screen(*start[i])
+            sx2, sy2 = world_to_screen(*end[i])
+            pygame.draw.line(screen, EDGE_COLOR, (sx1, sy1), (sx2, sy2), 2)
 
-    # ---------------------------------------------------------
-    #  НАВЕДЕНИЕ МЫШЬЮ - ПОДСКАЗКА СО СТАТИСТИКОЙ
-    # ---------------------------------------------------------
-    def find_node(x, y):
-        if x is None or y is None:
-            return None
-        dist = np.hypot(pos[:, 0] - x, pos[:, 1] - y)
-        i = int(np.argmin(dist))
-        return i if dist[i] < HIT_RADIUS else None
+            lx, ly = world_to_screen(*left[i])
+            rx, ry = world_to_screen(*right[i])
+            pygame.draw.lines(screen, ARROW_COLOR, False, [(lx, ly), (sx2, sy2), (rx, ry)], 2)
 
-    def tooltip_text(node):
-        gender = GENDER_LABELS.get(node.gender, node.gender)
-        status = "жив" if node.alive else "мёртв"
-        return (
-            f"{node.name}\n"
-            f"Статус: {status}\n"
-            f"Поколение: {node.generation}\n"
-            f"Возраст: {node.age}\n"
-            f"Пол: {gender}\n"
-            f"Редкость: {node.rarity}\n"
-            f"Отпечаток: {node.genid}\n"
-            f"Доминантность: {node.gendom}\n"
-            f"Мутация: {node.mutrate}%"
-        )
+    def draw_nodes(hovered_idx, dragging_idx):
+        scale = camera["scale"]
+        for i in range(n):
+            if not visible[i]:
+                continue
+            wx, wy = pos[i]
+            sx, sy = world_to_screen(wx, wy)
+            if sx < -100 or sx > SCREEN_W + 100 or sy < -100 or sy > SCREEN_H + 100:
+                continue  # вне экрана - не тратим blit
 
-    def update_hover(i):
-        if hover_state["i"] == i:
-            if i is not None:
-                x, y = pos[i]
-                tooltip.xy = (x, y)
+            is_active = (i == hovered_idx) or (i == dragging_idx)
+
+            halo_surf = halo_cache[i].get(scale)
+            screen.blit(halo_surf, halo_surf.get_rect(center=(sx, sy)))
+
+            sc, hw, hh = sprite_cache[i]
+            if sc is not None:
+                img = sc.get(scale)
+                screen.blit(img, img.get_rect(center=(sx, sy)))
+                if is_active:
+                    pygame.draw.circle(screen, ACCENT_COLOR, (int(sx), int(sy)),
+                                        int(max(hw, hh) * scale), width=2)
+            else:
+                r = int(NODE_RADIUS_WORLD * scale)
+                pygame.draw.circle(screen, node_colors[i], (int(sx), int(sy)), r)
+                border = ACCENT_COLOR if is_active else WHITE
+                pygame.draw.circle(screen, border, (int(sx), int(sy)), r, width=2)
+
+            name_s = name_surfs[i]
+            screen.blit(name_s, name_s.get_rect(midbottom=(sx, sy - (hh if sc else NODE_RADIUS_WORLD) * scale - 6)))
+            gen_s = gen_surfs[i]
+            screen.blit(gen_s, gen_s.get_rect(midtop=(sx, sy + (hh if sc else NODE_RADIUS_WORLD) * scale + 6)))
+
+    def draw_tooltip(idx, mouse_pos):
+        lines = tooltip_lines(nodes[idx])
+        surfs = [font_tooltip_bold.render(lines[0], True, TEXT_COLOR)]
+        surfs += [font_tooltip.render(l, True, TEXT_COLOR) for l in lines[1:]]
+        w = max(s.get_width() for s in surfs) + 24
+        line_h = font_tooltip.get_height() + 6
+        h = line_h * len(surfs) + 20
+
+        x = mouse_pos[0] + 18
+        y = mouse_pos[1] + 18
+        if x + w > SCREEN_W:
+            x = mouse_pos[0] - w - 18
+        if y + h > SCREEN_H:
+            y = mouse_pos[1] - h - 18
+
+        box = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(box, (*TOOLTIP_BG, 245), box.get_rect(), border_radius=10)
+        pygame.draw.rect(box, ACCENT_COLOR, box.get_rect(), width=2, border_radius=10)
+        for i, s in enumerate(surfs):
+            box.blit(s, (12, 10 + i * line_h))
+        screen.blit(box, (x, y))
+
+    def draw_panel(offset_x):
+        if offset_x >= SCREEN_W:
             return
-        hover_state["i"] = i
-        if i is None:
-            tooltip.set_visible(False)
-        else:
-            node = nodes[i]
-            tooltip.set_text(tooltip_text(node))
-            x, y = pos[i]
-            tooltip.xy = (x, y)
-            tooltip.set_visible(True)
-        fig.canvas.draw()
+        panel_rect = pygame.Rect(panel_open_x, 0, PANEL_W, SCREEN_H)
+        panel_rect.x = offset_x
+        pygame.draw.rect(screen, PANEL_COLOR, panel_rect)
 
-    # ---------------------------------------------------------
-    #  СОН / ПРОБУЖДЕНИЕ АНИМАЦИИ
-    # ---------------------------------------------------------
-    sleep_state = {"asleep": False, "quiet_frames": 0}
-    anim_ref = {}
+        title = font_title.render("Параметры симуляции", True, TEXT_COLOR)
+        screen.blit(title, (offset_x + 20, 20))
 
-    def wake():
-        sleep_state["quiet_frames"] = 0
-        if sleep_state["asleep"]:
-            sleep_state["asleep"] = False
-            anim = anim_ref.get("anim")
-            if anim is not None:
-                anim.event_source.start()
-
-    # ---------------------------------------------------------
-    #  ПЕРЕТАСКИВАНИЕ УЗЛОВ + ПАНОРАМИРОВАНИЕ ПОЛЯ + ЗУМ КОЛЁСИКОМ
-    # ---------------------------------------------------------
-    pan_state = {"active": False, "start_px": None, "start_xlim": None, "start_ylim": None}
-    # Мышь шлёт события движения/скролла значительно чаще 60 раз в секунду.
-    # Раньше каждое такое событие вызывало немедленный fig.canvas.draw() -
-    # это и было причиной резкого проседания FPS при вращении камеры.
-    # Теперь событие только помечает сцену как "нужно перерисовать", а
-    # реальный полный redraw делает animate() не чаще одного раза за кадр.
-    view_dirty = {"flag": False}
-
-    def on_press(event):
-        if event.inaxes != ax or event.xdata is None or event.ydata is None:
-            return
-        i = find_node(event.xdata, event.ydata)
-        dragged_idx["i"] = i
-        if i is not None:
-            dragged_mask[i] = True
-            vel[i] = 0.0
-            force_dirty.add(i)
-            wake()
-        else:
-            # клик по пустому месту - тащим саму сцену (панорама)
-            pan_state.update(active=True, start_px=(event.x, event.y),
-                             start_xlim=ax.get_xlim(), start_ylim=ax.get_ylim())
-            update_hover(None)
-
-    def on_motion(event):
-        i = dragged_idx["i"]
-        if i is not None:
-            if event.inaxes == ax and event.xdata is not None and event.ydata is not None:
-                pos[i] = (event.xdata, event.ydata)
-            return
-
-        if pan_state["active"]:
-            if event.x is None or event.y is None:
-                return
-            dx_px = event.x - pan_state["start_px"][0]
-            dy_px = event.y - pan_state["start_px"][1]
-            bbox = ax.get_window_extent()
-            if bbox.width <= 0 or bbox.height <= 0:
-                return
-            xlim0, ylim0 = pan_state["start_xlim"], pan_state["start_ylim"]
-            dx_data = -dx_px / bbox.width * (xlim0[1] - xlim0[0])
-            dy_data = -dy_px / bbox.height * (ylim0[1] - ylim0[0])
-            ax.set_xlim(xlim0[0] + dx_data, xlim0[1] + dx_data)
-            ax.set_ylim(ylim0[0] + dy_data, ylim0[1] + dy_data)
-            view_dirty["flag"] = True
-            wake()
-            return
-
-        if event.inaxes != ax:
-            update_hover(None)
-            return
-        update_hover(find_node(event.xdata, event.ydata))
-
-    def on_release(event):
-        i = dragged_idx["i"]
-        if i is not None:
-            dragged_mask[i] = False
-            force_dirty.add(i)
-        dragged_idx["i"] = None
-        pan_state["active"] = False
-        wake()
-
-    def on_scroll(event):
-        if event.inaxes != ax or event.xdata is None or event.ydata is None:
-            return
-        step = getattr(event, "step", 0)
-        zooming_in = (step > 0) if step else (event.button == "up")
-        factor = ZOOM_IN_FACTOR if zooming_in else ZOOM_OUT_FACTOR
-
-        cur_xlim = ax.get_xlim()
-        cur_ylim = ax.get_ylim()
-        span_x = (cur_xlim[1] - cur_xlim[0]) * factor
-        span_y = (cur_ylim[1] - cur_ylim[0]) * factor
-
-        home_span_x = home_xlim[1] - home_xlim[0]
-        min_span_x = MIN_VIEW_SPAN
-        max_span_x = home_span_x * MAX_VIEW_ZOOM_OUT
-        if not (min_span_x <= span_x <= max_span_x):
-            return
-
-        xdata, ydata = event.xdata, event.ydata
-        relx = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
-        rely = (ydata - cur_ylim[0]) / (cur_ylim[1] - cur_ylim[0])
-        ax.set_xlim(xdata - span_x * relx, xdata + span_x * (1 - relx))
-        ax.set_ylim(ydata - span_y * rely, ydata + span_y * (1 - rely))
-        view_dirty["flag"] = True
-        wake()
-
-    fig.canvas.mpl_connect("button_press_event", on_press)
-    fig.canvas.mpl_connect("motion_notify_event", on_motion)
-    fig.canvas.mpl_connect("button_release_event", on_release)
-    fig.canvas.mpl_connect("scroll_event", on_scroll)
-
-    # ---------------------------------------------------------
-    #  КНОПКА "ПЕРЕСОБРАТЬ"
-    # ---------------------------------------------------------
-    def regenerate(event):
-        layout_by_generation(params["spring_len"], 0.5, 0.4)
-        prev_pos[:] = pos
-        last_drawn_pos[:] = pos
-        vel[:] = np.random.uniform(-0.6, 0.6, size=(n, 2))
-        ax.set_xlim(*home_xlim)
-        ax.set_ylim(*home_ylim)
-        start_reveal()
-        wake()
-
-    # Кнопки внизу теперь полупрозрачные - раньше это была сплошная
-    # закрашенная плашка, которая могла перекрыть фредиков, оказавшихся
-    # под ней (график теперь занимает всю высоту окна, без отступа снизу).
-    button_ax = fig.add_axes([0.77, 0.015, 0.2, 0.055])
-    regenerate_button = Button(button_ax, "⟳ Пересобрать",
-                                color=_rgba(PANEL_COLOR, 0.35), hovercolor=_rgba(PANEL_HOVER, 0.8))
-    regenerate_button.label.set_color(TEXT_COLOR)
-    regenerate_button.label.set_fontsize(10)
-    regenerate_button.on_clicked(regenerate)
-
-    # ---------------------------------------------------------
-    #  ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ НАСТРОЕК
-    # ---------------------------------------------------------
-    panel_state = {"x": PANEL_CLOSED_X, "target_x": PANEL_CLOSED_X, "open": False}
-
-    panel_bg_ax = fig.add_axes([PANEL_CLOSED_X, PANEL_BOTTOM, PANEL_WIDTH, PANEL_HEIGHT_FRAC])
-    panel_bg_ax.set_facecolor(PANEL_COLOR)
-    panel_bg_ax.set_xticks([])
-    panel_bg_ax.set_yticks([])
-    for spine in panel_bg_ax.spines.values():
-        spine.set_visible(False)
-    panel_bg_ax.set_zorder(10)
-
-    title_open_x = PANEL_OPEN_X + 0.02
-    title_y = PANEL_BOTTOM + PANEL_HEIGHT_FRAC - 0.045
-    title_text = fig.text(title_open_x, title_y, "Параметры симуляции",
-                           color=TEXT_COLOR, fontsize=11, fontweight="bold", zorder=11)
-
-    slider_axes_info = []
-    label_texts_info = []
-    sliders = []
-
-    row_top = PANEL_BOTTOM + PANEL_HEIGHT_FRAC - 0.11
-    row_gap = 0.075
-    row_h = 0.026
-
-    def update_param(key, val):
-        params[key] = val
-        wake()
-
-    for idx, (key, label, vmin, vmax) in enumerate(SLIDERS):
-        y = row_top - idx * row_gap
-        open_x = PANEL_OPEN_X + 0.035
-        w = PANEL_WIDTH - 0.07
-        label_open_x = PANEL_OPEN_X + 0.03
-        label_y = y + row_h + 0.018
-
-        txt = fig.text(label_open_x, label_y, label, color=TEXT_COLOR, fontsize=8.5, zorder=11)
-        label_texts_info.append((txt, label_open_x, label_y))
-
-        slider_ax = fig.add_axes([open_x, y, w, row_h])
-        slider_ax.set_zorder(11)
-        slider_ax.set_facecolor(PANEL_HOVER)
-        slider = Slider(slider_ax, "", vmin, vmax, valinit=params[key], color=ACCENT_COLOR)
-        slider.valtext.set_color(TEXT_COLOR)
-        slider.valtext.set_fontsize(7.5)
-        slider.on_changed(partial(update_param, key))
-
-        slider_axes_info.append((slider_ax, open_x, y, w, row_h))
-        sliders.append(slider)
-
-    reset_y = row_top - len(SLIDERS) * row_gap - 0.01
-    reset_open_x = PANEL_OPEN_X + 0.035
-    reset_w = PANEL_WIDTH - 0.07
-    reset_h = 0.045
-    reset_button_ax = fig.add_axes([reset_open_x, reset_y, reset_w, reset_h])
-    reset_button_ax.set_zorder(11)
-    reset_button = Button(reset_button_ax, "Сбросить настройки", color=PANEL_HOVER, hovercolor=ACCENT_COLOR)
-    reset_button.label.set_color(TEXT_COLOR)
-    reset_button.label.set_fontsize(8.5)
-
-    def do_reset(event):
+        dx = offset_x - panel_open_x
         for s in sliders:
-            s.reset()
-        wake()
+            s.draw(screen, (dx, 0))
+        reset_button.rect.x = panel_open_x + 20
+        reset_button.draw(screen, (dx, 0))
 
-    reset_button.on_clicked(do_reset)
+    # ---------- главный цикл ----------
+    dragging_node = None
+    panning = False
+    pan_start_screen = (0, 0)
+    pan_start_cam = (0.0, 0.0)
+    active_slider = None
 
-    def sync_panel_positions():
-        delta = panel_state["x"] - PANEL_OPEN_X
-        panel_bg_ax.set_position([PANEL_OPEN_X + delta, PANEL_BOTTOM, PANEL_WIDTH, PANEL_HEIGHT_FRAC])
-        title_text.set_position((title_open_x + delta, title_y))
-        for ax_s, open_x, y, w, h in slider_axes_info:
-            ax_s.set_position([open_x + delta, y, w, h])
-        for txt, open_x, y in label_texts_info:
-            txt.set_position((open_x + delta, y))
-        reset_button_ax.set_position([reset_open_x + delta, reset_y, reset_w, reset_h])
+    reveal_all_immediately()
+    regenerate()
 
-    sync_panel_positions()
+    running = True
+    while running:
+        mouse_pos = pygame.mouse.get_pos()
 
-    def toggle_panel(event):
-        panel_state["open"] = not panel_state["open"]
-        panel_state["target_x"] = PANEL_OPEN_X if panel_state["open"] else PANEL_CLOSED_X
-        wake()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-    gear_button_ax = fig.add_axes([0.955, 0.925, 0.038, 0.05])
-    gear_button = Button(gear_button_ax, "⚙", color=PANEL_COLOR, hovercolor=PANEL_HOVER)
-    gear_button.label.set_color(TEXT_COLOR)
-    gear_button.label.set_fontsize(13)
-    gear_button.on_clicked(toggle_panel)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mx, my = event.pos
+                handled = (regen_button.handle_click((mx, my))
+                           or home_button.handle_click((mx, my))
+                           or gear_button.handle_click((mx, my)))
 
-    # ---------------------------------------------------------
-    #  КНОПКА "НА ДОМ" - сбросить панораму/зум, если фредики разбежались
-    # ---------------------------------------------------------
-    def go_home(event):
-        ax.set_xlim(*home_xlim)
-        ax.set_ylim(*home_ylim)
-        view_dirty["flag"] = True
-        wake()
+                if not handled and panel_state["x"] < SCREEN_W - 5:
+                    dx = panel_state["x"] - panel_open_x
+                    if reset_button.rect.move(dx, 0).collidepoint(mx, my):
+                        reset_button.on_click()
+                        handled = True
+                    else:
+                        for s in sliders:
+                            if s.try_grab((mx, my), (dx, 0)):
+                                params[s.key] = s.value
+                                active_slider = s
+                                handled = True
+                                break
 
-    home_button_ax = fig.add_axes([0.015, 0.015, 0.09, 0.05])
-    home_button = Button(home_button_ax, "⌂ Вид",
-                          color=_rgba(PANEL_COLOR, 0.35), hovercolor=_rgba(PANEL_HOVER, 0.8))
-    home_button.label.set_color(TEXT_COLOR)
-    home_button.label.set_fontsize(10)
-    home_button.on_clicked(go_home)
+                if not handled:
+                    wx, wy = screen_to_world(mx, my)
+                    idx = find_node_at(wx, wy)
+                    if idx is not None:
+                        dragging_node = idx
+                        dragged_mask[idx] = True
+                        vel[idx] = 0.0
+                    else:
+                        panning = True
+                        pan_start_screen = (mx, my)
+                        pan_start_cam = (camera["cx"], camera["cy"])
 
-    # ---------------------------------------------------------
-    #  ЦИКЛ АНИМАЦИИ
-    # ---------------------------------------------------------
-    def animate(frame):
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if dragging_node is not None:
+                    dragged_mask[dragging_node] = False
+                    dragging_node = None
+                panning = False
+                if active_slider is not None:
+                    active_slider.release()
+                    active_slider = None
+
+            elif event.type == pygame.MOUSEMOTION:
+                if dragging_node is not None:
+                    wx, wy = screen_to_world(*event.pos)
+                    pos[dragging_node] = (wx, wy)
+                elif panning:
+                    dxp = event.pos[0] - pan_start_screen[0]
+                    dyp = event.pos[1] - pan_start_screen[1]
+                    camera["cx"] = pan_start_cam[0] - dxp / camera["scale"]
+                    camera["cy"] = pan_start_cam[1] + dyp / camera["scale"]
+                elif active_slider is not None:
+                    dx = panel_state["x"] - panel_open_x
+                    active_slider.drag_to(event.pos, (dx, 0))
+                    params[active_slider.key] = active_slider.value
+
+            elif event.type == pygame.MOUSEWHEEL:
+                factor = ZOOM_IN_FACTOR if event.y > 0 else ZOOM_OUT_FACTOR
+                zoom_at(mouse_pos, factor)
+
+        # ---- физика и анимация появления ----
         prev_pos[:] = pos
         step_physics()
         advance_reveal()
-        changed = update_artists()
 
-        panel_moving = panel_state["x"] != panel_state["target_x"]
-        if panel_moving:
+        if panel_state["x"] != panel_state["target_x"]:
             panel_state["x"] += (panel_state["target_x"] - panel_state["x"]) * PANEL_EASE
-            if abs(panel_state["target_x"] - panel_state["x"]) < 0.0015:
+            if abs(panel_state["target_x"] - panel_state["x"]) < 0.5:
                 panel_state["x"] = panel_state["target_x"]
-            sync_panel_positions()
 
-        # Панель настроек - это отдельные Axes, а смена xlim/ylim при
-        # панораме/зуме требует пересчёта фонового снимка блиттинга -
-        # ни то, ни другое блиттинг сам не подхватывает. Но вместо
-        # редроу на каждое событие мыши (это и тормозило) делаем его
-        # максимум один раз за кадр анимации.
-        if panel_moving or view_dirty["flag"]:
-            fig.canvas.draw()
-            view_dirty["flag"] = False
+        hovered = None
+        if dragging_node is None and not panning and active_slider is None:
+            wx, wy = screen_to_world(*mouse_pos)
+            hovered = find_node_at(wx, wy)
 
-        max_move = np.max(np.hypot(*(pos - prev_pos).T)) if n else 0.0
-        busy = reveal["active"] or panel_moving or dragged_idx["i"] is not None or pan_state["active"]
-        if not busy and max_move < SLEEP_MOVE_EPS:
-            sleep_state["quiet_frames"] += 1
-            if sleep_state["quiet_frames"] >= SLEEP_FRAMES_NEEDED:
-                sleep_state["asleep"] = True
-                anim_ref["anim"].event_source.stop()
-        else:
-            sleep_state["quiet_frames"] = 0
+        # ---- отрисовка ----
+        screen.fill(BG_COLOR)
+        draw_edges()
+        draw_nodes(hovered, dragging_node)
 
-        return changed
+        title = font_title.render("Генеалогическое древо", True, TEXT_COLOR)
+        screen.blit(title, title.get_rect(midtop=(SCREEN_W // 2, 14)))
 
-    def init_anim():
-        return update_artists()
+        regen_button.draw(screen)
+        home_button.draw(screen)
+        gear_button.draw(screen)
+        draw_panel(panel_state["x"])
 
-    reveal_all_immediately()
-    update_artists()
-    anim = FuncAnimation(fig, animate, init_func=init_anim, interval=FRAME_INTERVAL_MS,
-                          cache_frame_data=False, blit=True)
-    anim_ref["anim"] = anim
-    fig._tree_animation_ref = anim
+        if hovered is not None:
+            draw_tooltip(hovered, mouse_pos)
 
-    regenerate(None)
+        pygame.display.flip()
+        clock.tick(FPS)
 
-    plt.show()
+    pygame.quit()
+
