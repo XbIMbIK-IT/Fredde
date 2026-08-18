@@ -6,7 +6,7 @@ from simulation import step
 from freddePhoto import show_fredde
 from freddePhoto import save_fredde
 
-Ded1 = fredde(
+Ded1 = Fredde(
     name='Гипнокрад',
     eyelash= False,
     eye= 'blackout',
@@ -21,7 +21,7 @@ Ded1 = fredde(
     age=11
 )
 
-Babka1 = fredde(
+Babka1 = Fredde(
     name='Агафья',
     eyelash= False,
     eye= 'hearts',
@@ -36,7 +36,7 @@ Babka1 = fredde(
     age=11
 )
 
-Ded2 = fredde(
+Ded2 = Fredde(
     name='Касеки',
     eyelash=False,
     eye='ghoul',
@@ -51,7 +51,7 @@ Ded2 = fredde(
     age=11
 )
 
-Babka2 = fredde(
+Babka2 = Fredde(
     name='Бабка гренни',
     eyelash=False,
     eye='herobrine',
@@ -66,7 +66,7 @@ Babka2 = fredde(
     age=11
 )
 
-Ded3 = fredde(
+Ded3 = Fredde(
     name='Хрящ',
     eyelash=False,
     eye='ghoul',
@@ -81,7 +81,7 @@ Ded3 = fredde(
     age=11
 )
 
-Babka3 = fredde(
+Babka3 = Fredde(
     name='Баба капа',
     eyelash=False,
     eye='herobrine',
@@ -96,7 +96,7 @@ Babka3 = fredde(
     age=11
 )
 
-Gurin = fredde(
+Gurin = Fredde(
     name='Гурин',
     eyelash=False,
     eye='gurin',
