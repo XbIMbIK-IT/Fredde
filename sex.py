@@ -233,6 +233,6 @@ def mut_chance(parent1, parent2, total_dom):
     # Разница поколений
     if parent1.generation != parent2.generation:
         gendif = abs(parent2.generation - parent1.generation)
-        MutRate += (gendif * 2)
+        MutRate += (gendif * 1.3)
 
     return MutRate
