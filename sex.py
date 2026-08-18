@@ -227,8 +227,8 @@ def mut_chance(parent1, parent2, total_dom):
             MutRate = 8
         else:
             MutRate *= 1.3
-    elif random.random() <= 0.4 and parent1.generation == parent2.generation:
-        MutRate -= 4
+    elif random.random() <= 0.5 and parent1.generation == parent2.generation:
+        MutRate -= 6
 
     # Разница поколений
     if parent1.generation != parent2.generation:
