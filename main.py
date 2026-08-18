@@ -1,5 +1,5 @@
 from fredde import freddies
-from fredde import fredde
+from fredde import Fredde
 from sex import try_sex,sex
 import tree
 from simulation import step
