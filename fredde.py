@@ -1,5 +1,6 @@
 import random
 
+MAX_AGE = 25
 
 with open("NameList.txt", "r", encoding="utf-8") as f:
     NAME_LIST = f.read().splitlines()
@@ -45,6 +46,7 @@ class Fredde:
         self.eyeAcs = eyeAcs
         self.bodyPattern = bodyPattern
         self.eyelash = eyelash
+        self.max_age = MAX_AGE * (1 - freddie.mutrate / 100)
 
         freddies.append(self)
         
@@ -59,3 +61,13 @@ class Fredde:
                 family.add(relative)
 
         return family
+
+    def check_death(self):
+        if self.alive and self.age > self.max_age:
+            if random.random() < 0.5:
+                fredde.alive = False
+
+        if self.alive:
+            return True
+            
+        return False

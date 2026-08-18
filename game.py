@@ -2,7 +2,7 @@ import pygame
 import sys
 import time
 
-from fredde import freddies, fredde
+from fredde import freddies, Fredde
 from sex import try_sex
 from simulation import step
 from freddePhoto import generate_fredde
@@ -242,7 +242,7 @@ def buy_fredde():
 
     food -= FREDDE_FOOD_COST
 
-    new_fredde = fredde(
+    new_fredde = Fredde(
         name=f"Fredde #{len(freddies) + 1}",
         age=1
     )
