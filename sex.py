@@ -1,5 +1,38 @@
 from fredde import fredde
 import random
+import os
+
+# Подгрузка визуала и случайный визуал
+def load_visuals():
+    visual_params = [
+        "bodyPattern",
+        "eye",
+        "eyeAcs",
+        "faceAcs",
+        "hatAcs"
+    ]
+
+    visuals = {}
+
+    for param in visual_params:
+        path = f"sprites/{param}"
+
+        try:
+            visuals[param] = [
+                filename.rsplit(".", 1)[0]
+                for filename in os.listdir(path)
+                if os.path.isfile(os.path.join(path, filename))
+            ]
+        except FileNotFoundError:
+            visuals[param] = []
+
+    return visuals
+Visuals = load_visuals()
+
+def random_visual(visuals, param):
+    return random.choice(visuals[param])
+
+
 
 with open("NameList.txt", "r", encoding="utf-8") as f:
     NameList = f.read().splitlines()
@@ -79,6 +112,16 @@ def sex(parent1, parent2):
     else:
         babyrarity = parent2.rarity
 
+    # Словарь с визуалом
+    baby_visuals = {
+    "bodyPattern": parent1.bodyPattern if random.random() <= parent1_chance else parent2.bodyPattern,
+    "eye": parent1.eye if random.random() <= parent1_chance else parent2.eye,
+    "eyeAcs": parent1.eyeAcs if random.random() <= parent1_chance else parent2.eyeAcs,
+    "faceAcs": parent1.faceAcs if random.random() <= parent1_chance else parent2.faceAcs,
+    "hatAcs": parent1.hatAcs if random.random() <= parent1_chance else parent2.hatAcs
+    }
+
+
     # Мутация
     if random.uniform(0, 100) <= MutRate:
 
@@ -111,6 +154,15 @@ def sex(parent1, parent2):
         )
 
         babyrarity = RarityList[rarity_index]
+
+        # Мутация словоря с визуалом
+        baby_visuals["bodyPattern"] = random_visual(Visuals, "bodyPattern")
+        baby_visuals["eye"] = random_visual(Visuals, "eye")
+        baby_visuals["eyeAcs"] = random_visual(Visuals, "eyeAcs")
+        baby_visuals["faceAcs"] = random_visual(Visuals, "faceAcs")
+        baby_visuals["hatAcs"] = random_visual(Visuals, "hatAcs")
+
+    
 
     # Пол ребенка
     gender_roll = random.uniform(0, 100)
@@ -147,7 +199,13 @@ def sex(parent1, parent2):
         generation=babygeneration,
         gender=babygender,
         age=1,
-        eyelash=eyelash
+        eyelash=eyelash,
+
+        bodyPattern=baby_visuals["bodyPattern"],
+        eye=baby_visuals["eye"],
+        eyeAcs=baby_visuals["eyeAcs"],
+        faceAcs=baby_visuals["faceAcs"],
+        hatAcs=baby_visuals["hatAcs"],
     )
 
 
