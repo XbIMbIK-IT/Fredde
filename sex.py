@@ -156,11 +156,20 @@ def sex(parent1, parent2):
         babyrarity = RarityList[rarity_index]
 
         # Мутация словоря с визуалом
-        baby_visuals["bodyPattern"] = random_visual(Visuals, "bodyPattern")
-        baby_visuals["eye"] = random_visual(Visuals, "eye")
-        baby_visuals["eyeAcs"] = random_visual(Visuals, "eyeAcs")
-        baby_visuals["faceAcs"] = random_visual(Visuals, "faceAcs")
-        baby_visuals["hatAcs"] = random_visual(Visuals, "hatAcs")
+        if random.random() <= 0.5:
+            baby_visuals["bodyPattern"] = random_visual(Visuals, "bodyPattern")
+
+        if random.random() <= 0.5:
+            baby_visuals["eye"] = random_visual(Visuals, "eye")
+
+        if random.random() <= 0.5:
+            baby_visuals["eyeAcs"] = random_visual(Visuals, "eyeAcs")
+
+        if random.random() <= 0.5:
+            baby_visuals["faceAcs"] = random_visual(Visuals, "faceAcs")
+
+        if random.random() <= 0.5:
+            baby_visuals["hatAcs"] = random_visual(Visuals, "hatAcs")
 
     
 
