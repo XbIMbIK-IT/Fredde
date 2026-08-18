@@ -14,7 +14,7 @@ class Fredde:
         age=1,
         gender='is', #boy, girl, is (intersex), cf (childfree)
         genid=1,
-        gendom=1,
+        gendom=0.5,
         mutrate=5,
         rarity='common',
         parents=None,
