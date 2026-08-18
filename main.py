@@ -157,4 +157,4 @@ baby7, message = try_sex(baby3, baby5)
 
 #show_fredde(Babka1)
 
-tree.show()
+tree.main()
