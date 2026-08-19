@@ -4,8 +4,10 @@ class Paddock(list):
         self.freddies = []
 
         for fred in freds:
-            self.add(fred)
+            self._add(fred)
 
-    def add(self, fred):
+    def _add(self, fred):
         if Len(self.freddies) == max_freds:
             raise Error("Загон переполнен")
+        else:
+            self.freddies.append(fred)
