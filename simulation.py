@@ -1,8 +1,6 @@
-import random
+from Paddock import paddocks
 
 
-
-def step(freddies):
-    for freddie in freddies:
-        if freddie.check_death():
-            freddie.age += 1
+def step():
+    for p in paddocks:
+        p.step()
