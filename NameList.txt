@@ -52,7 +52,6 @@ Michael
 Electrobab
 Lefty
 Barny
-Gay
 Lion Fredde
 Nigr Fredde
 Atos Glimmer
@@ -92,12 +91,6 @@ Samson
 Azazel
 Lazarus
 Eden
-Jane
-John
-Shein
-Clocker
-Librarer
-Blood King
 Lilith
 Appolyon
 Maphlas
@@ -703,8 +696,8 @@ NameList.txt
 fredde.py
 freddePhoto.py
 main.py
-Semsot
 sex.py
+Semsot
 simulation.py
 tree.py
 Dzin
@@ -803,6 +796,7 @@ Bon-Bon
 Funtime Foxy
 Ennard
 Bidybab
+Gay
 Vosemsot
 Minireena
 Bonnet
@@ -866,3 +860,9 @@ Mike Schmidt
 Vanessa
 Candy
 Sparky
+Jane
+Johnny
+Shein
+Clocker
+Librarer
+Blood King
