@@ -4,7 +4,7 @@ Morgano
 Bobuke
 Dessforge
 Ogyrzik
-Artemida
+James Bond
 Skylar
 Hermit
 UncommonCash
@@ -774,6 +774,7 @@ Phantom Chica
 Phantom Foxy
 Phantom Mangle
 Phantom Balloon Boy
+Jackpot
 Phantom Puppet
 Shadow Freddy
 Nightmare Freddy
@@ -796,8 +797,8 @@ Bon-Bon
 Funtime Foxy
 Ennard
 Bidybab
-Gay
 Vosemsot
+Gay
 Minireena
 Bonnet
 Yenndo
@@ -866,3 +867,36 @@ Shein
 Clocker
 Librarer
 Blood King
+Medovic
+Medoed
+Medoglot
+Medonuh
+Medoliz
+Medosos
+Mesopotamia
+The International
+Artemida
+DalDalYshel
+SSS+
+TCP
+IP
+HTTPS
+Hamam
+USSR
+kkpart
+OP
+OP+
+Sozdatel servera
+Vladelets servera
+Adminabuzer
+Vlastelin servera
+Hacker
+Tsar servera
+Helper+
+Moderator++
+Booster+
+Grifer
+Anti-grifer
+Deviatsot
+Korol servera
+Imperator servera
